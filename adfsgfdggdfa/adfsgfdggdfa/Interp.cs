@@ -1,215 +1,658 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 
-class E : Exception { public string Code; public E(string c) { Code = c; } }
-
-class Interp
+// A futtatás során fellépő hiba. Az ErrorCode kerül be a naplóba (pl. "E_BAD_ARG").
+class InterpreterException : Exception
 {
-    static readonly int[] DR = { 0, -1, 0, 1 };   // kelet, észak, nyugat, dél (balra fordulás = index+1)
-    static readonly int[] DC = { 1, 0, -1, 0 };
-    public const string Arrows = ">^<v";
+    public string ErrorCode;
 
-    string[] init; public int R, C;
-    public char[,] G; public bool[,] Exp;
-    public int pr, pc, dir, Gold, Count;
-    public Dictionary<string, object> V = new Dictionary<string, object>();
-    public List<string> Log = new List<string>(), Out = new List<string>();
-    public bool Stop, Limit, Done; public string Err;
-    string api;
+    public InterpreterException(string errorCode)
+    {
+        ErrorCode = errorCode;
+    }
+}
 
-    public Interp(string[] map) { init = map; R = map.Length; C = map[0].Length; Reset(); }
+class Interpreter
+{
+    // ---------- Irányok ----------
+    // Index: 0 = kelet, 1 = észak, 2 = nyugat, 3 = dél.
+    // Balra fordulás = index + 1.
+    static readonly int[] RowChangePerDirection = { 0, -1, 0, 1 };
+    static readonly int[] ColumnChangePerDirection = { 1, 0, -1, 0 };
 
+    // A robotot jelölő nyilak a térképen, az irány indexének sorrendjében.
+    public const string RobotArrows = ">^<v";
+
+    // ---------- Cellatípusok (a szenzor ezeket adja vissza) ----------
+    public const int CellEmpty = 0;
+    public const int CellWall = 1;
+    public const int CellGold = 2;
+
+    const int MaxInstructionCount = 1000;
+
+    // ---------- Állapot ----------
+    string[] initialMap;                  // a kezdő térkép (Reset ebből építi újra a rácsot)
+    public int Rows;
+    public int Columns;
+    public char[,] Grid;                  // a térkép jelenlegi állapota ('#', '@', '.')
+    public bool[,] Explored;              // melyik cellát látta/érintette már a robot
+    public int RobotRow;
+    public int RobotColumn;
+    public int Direction;                 // 0..3, lásd fent
+    public int CollectedGold;
+    public int InstructionCount;          // eddig végrehajtott utasítások száma
+
+    public Dictionary<string, object> Variables = new Dictionary<string, object>();   // értékek: int vagy bool
+    public List<string> Log = new List<string>();      // az output fájl tartalma
+    public List<string> Output = new List<string>();   // a print utasítások kimenete
+
+    public bool Stopped;                  // a futás leállt (hiba vagy limit miatt)
+    public bool LimitExceeded;            // az utasításszám-limit miatt állt le
+    public bool Finished;                 // a futás véget ért (Finish hívás után)
+    public string ErrorCode;              // az utolsó hiba kódja, ha volt
+
+    // Az aktuális sor "API-hívásának" leírása a naplóhoz (pl. "step forward 3"); null, ha nincs.
+    string currentApiCall;
+
+    public Interpreter(string[] map)
+    {
+        initialMap = map;
+        Rows = map.Length;
+        Columns = map[0].Length;
+        Reset();
+    }
+
+    // Visszaállítja az alaphelyzetet: térkép, robot, változók, napló.
     public void Reset()
     {
-        G = new char[R, C]; Exp = new bool[R, C];
-        for (int i = 0; i < R; i++)
-            for (int j = 0; j < C; j++)
+        Grid = new char[Rows, Columns];
+        Explored = new bool[Rows, Columns];
+
+        for (int row = 0; row < Rows; row++)
+        {
+            for (int column = 0; column < Columns; column++)
             {
-                char ch = init[i][j];
-                int d = Arrows.IndexOf(ch);
-                if (d >= 0) { pr = i; pc = j; dir = d; ch = '.'; }
-                G[i, j] = ch;
+                char symbol = initialMap[row][column];
+
+                // Ha nyilat találunk, ott áll a robot; a cella maga üres.
+                int arrowDirection = RobotArrows.IndexOf(symbol);
+                if (arrowDirection >= 0)
+                {
+                    RobotRow = row;
+                    RobotColumn = column;
+                    Direction = arrowDirection;
+                    symbol = '.';
+                }
+
+                Grid[row, column] = symbol;
             }
-        Exp[pr, pc] = true;
-        V.Clear(); Log.Clear(); Out.Clear();
-        Gold = 0; Count = 0; Stop = Limit = Done = false; Err = null;
+        }
+
+        Explored[RobotRow, RobotColumn] = true;
+
+        Variables.Clear();
+        Log.Clear();
+        Output.Clear();
+
+        CollectedGold = 0;
+        InstructionCount = 0;
+        Stopped = false;
+        LimitExceeded = false;
+        Finished = false;
+        ErrorCode = null;
     }
 
-    public int Cell(int r, int c) => (r < 0 || c < 0 || r >= R || c >= C || G[r, c] == '#') ? 1 : G[r, c] == '@' ? 2 : 0;
-    public int Front() => Cell(pr + DR[dir], pc + DC[dir]);
-    public static string F(object o) => o is bool b ? (b ? "true" : "false") : o.ToString();
+    // ---------- Térkép és szenzor ----------
 
-    object Rd(string t)
+    // A cella típusa. A térképen kívüli cella falnak számít.
+    public int GetCellType(int row, int column)
     {
-        if (t == "true") return true;
-        if (t == "false") return false;
-        if (char.IsDigit(t[0])) return int.Parse(t);
-        if (V.TryGetValue(t, out var v)) return v;
-        throw new E("E_UNINITIALIZED");
+        bool isOutsideMap = row < 0 || column < 0 || row >= Rows || column >= Columns;
+        if (isOutsideMap)
+        {
+            return CellWall;
+        }
+
+        char symbol = Grid[row, column];
+        if (symbol == '#')
+        {
+            return CellWall;
+        }
+        if (symbol == '@')
+        {
+            return CellGold;
+        }
+        return CellEmpty;
     }
 
-    object Eval(string[] e)
+    // A robot előtti cella típusa.
+    public int GetFrontCellType()
     {
-        if (e.Length == 1) return Rd(e[0]);
-        if (e[0] == "isThere")
+        int frontRow = RobotRow + RowChangePerDirection[Direction];
+        int frontColumn = RobotColumn + ColumnChangePerDirection[Direction];
+        return GetCellType(frontRow, frontColumn);
+    }
+
+    // Érték szöveggé alakítása a naplóhoz és a kimenethez (bool: "true"/"false").
+    public static string FormatValue(object value)
+    {
+        if (value is bool)
         {
-            api = "isThere"; var p = Rd(e[1]); api += " " + F(p);
-            if (!(p is int w) || w < 0 || w > 2) throw new E("E_BAD_ARG");
-            int fr = pr + DR[dir], fc = pc + DC[dir];
-            if (fr >= 0 && fc >= 0 && fr < R && fc < C) Exp[fr, fc] = true;
-            bool res = Front() == w; api += " " + F(res); return res;
+            if ((bool)value)
+            {
+                return "true";
+            }
+            return "false";
         }
-        if (e[0] == "not")
+        return value.ToString();
+    }
+
+    // ---------- Értékek és kifejezések ----------
+
+    // Egy token értéke: true/false, szám vagy változó.
+    object ReadValue(string token)
+    {
+        if (token == "true")
         {
-            var x = Rd(e[1]); if (!(x is bool bx)) throw new E("E_BAD_OPERAND"); return !bx;
+            return true;
         }
-        var a = Rd(e[0]); string op = e[1];
-        if (op == "and" || op == "or")
+        if (token == "false")
         {
-            if (!(a is bool ba)) throw new E("E_BAD_OPERAND");
-            var b = Rd(e[2]); if (!(b is bool bb)) throw new E("E_BAD_OPERAND");
-            return op == "and" ? ba && bb : ba || bb;
+            return false;
         }
-        if (op == "=" || op == "<>")
+        if (char.IsDigit(token[0]))
         {
-            var b = Rd(e[2]); if (a.GetType() != b.GetType()) throw new E("E_BAD_OPERAND");
-            bool eq = a.Equals(b); return op == "=" ? eq : !eq;
+            return int.Parse(token);
         }
-        if (!(a is int ia)) throw new E("E_BAD_OPERAND");
-        var b2 = Rd(e[2]); if (!(b2 is int ib)) throw new E("E_BAD_OPERAND");
-        switch (op)
+
+        object variableValue;
+        if (Variables.TryGetValue(token, out variableValue))
         {
-            case "+": return unchecked(ia + ib);
-            case "-": return unchecked(ia - ib);
-            case "*": return unchecked(ia * ib);
-            case "<": return ia < ib;
-            case "<=": return ia <= ib;
-            case ">": return ia > ib;
-            default: return ia >= ib;
+            return variableValue;
+        }
+        throw new InterpreterException("E_UNINITIALIZED");
+    }
+
+    // A "set" jobb oldalának kiértékelése. Az eredmény int vagy bool.
+    object EvaluateExpression(string[] expression)
+    {
+        if (expression.Length == 1)
+        {
+            return ReadValue(expression[0]);
+        }
+        if (expression[0] == "isThere")
+        {
+            return EvaluateIsThere(expression[1]);
+        }
+        if (expression[0] == "not")
+        {
+            return EvaluateNot(expression[1]);
+        }
+
+        string leftToken = expression[0];
+        string operatorSymbol = expression[1];
+        string rightToken = expression[2];
+
+        if (operatorSymbol == "and" || operatorSymbol == "or")
+        {
+            return EvaluateLogicalOperation(leftToken, operatorSymbol, rightToken);
+        }
+        if (operatorSymbol == "=" || operatorSymbol == "<>")
+        {
+            return EvaluateEquality(leftToken, operatorSymbol, rightToken);
+        }
+        return EvaluateNumberOperation(leftToken, operatorSymbol, rightToken);
+    }
+
+    // isThere X: a robot előtti cella típusa egyenlő-e X-szel (0 = üres, 1 = fal, 2 = arany).
+    // Mellékhatás: a robot előtti cella "felfedezetté" válik.
+    object EvaluateIsThere(string argumentToken)
+    {
+        currentApiCall = "isThere";
+        object argument = ReadValue(argumentToken);
+        currentApiCall += " " + FormatValue(argument);
+
+        bool isValidCellType = argument is int && (int)argument >= 0 && (int)argument <= 2;
+        if (!isValidCellType)
+        {
+            throw new InterpreterException("E_BAD_ARG");
+        }
+        int expectedCellType = (int)argument;
+
+        int frontRow = RobotRow + RowChangePerDirection[Direction];
+        int frontColumn = RobotColumn + ColumnChangePerDirection[Direction];
+        bool isFrontInsideMap = frontRow >= 0 && frontColumn >= 0 && frontRow < Rows && frontColumn < Columns;
+        if (isFrontInsideMap)
+        {
+            Explored[frontRow, frontColumn] = true;
+        }
+
+        bool result = GetFrontCellType() == expectedCellType;
+        currentApiCall += " " + FormatValue(result);
+        return result;
+    }
+
+    // not X: logikai tagadás.
+    object EvaluateNot(string operandToken)
+    {
+        object operand = ReadValue(operandToken);
+        if (!(operand is bool))
+        {
+            throw new InterpreterException("E_BAD_OPERAND");
+        }
+        return !(bool)operand;
+    }
+
+    // and / or: mindkét oldalnak bool-nak kell lennie.
+    object EvaluateLogicalOperation(string leftToken, string operatorSymbol, string rightToken)
+    {
+        object left = ReadValue(leftToken);
+        if (!(left is bool))
+        {
+            throw new InterpreterException("E_BAD_OPERAND");
+        }
+
+        object right = ReadValue(rightToken);
+        if (!(right is bool))
+        {
+            throw new InterpreterException("E_BAD_OPERAND");
+        }
+
+        bool leftBool = (bool)left;
+        bool rightBool = (bool)right;
+        if (operatorSymbol == "and")
+        {
+            return leftBool && rightBool;
+        }
+        return leftBool || rightBool;
+    }
+
+    // = / <>: a két oldalnak azonos típusúnak kell lennie (int–int vagy bool–bool).
+    object EvaluateEquality(string leftToken, string operatorSymbol, string rightToken)
+    {
+        object left = ReadValue(leftToken);
+        object right = ReadValue(rightToken);
+        if (left.GetType() != right.GetType())
+        {
+            throw new InterpreterException("E_BAD_OPERAND");
+        }
+
+        bool areEqual = left.Equals(right);
+        if (operatorSymbol == "=")
+        {
+            return areEqual;
+        }
+        return !areEqual;
+    }
+
+    // + - * < <= > >=: mindkét oldalnak számnak kell lennie.
+    object EvaluateNumberOperation(string leftToken, string operatorSymbol, string rightToken)
+    {
+        object left = ReadValue(leftToken);
+        if (!(left is int))
+        {
+            throw new InterpreterException("E_BAD_OPERAND");
+        }
+
+        object right = ReadValue(rightToken);
+        if (!(right is int))
+        {
+            throw new InterpreterException("E_BAD_OPERAND");
+        }
+
+        int leftNumber = (int)left;
+        int rightNumber = (int)right;
+
+        switch (operatorSymbol)
+        {
+            case "+": return unchecked(leftNumber + rightNumber);
+            case "-": return unchecked(leftNumber - rightNumber);
+            case "*": return unchecked(leftNumber * rightNumber);
+            case "<": return leftNumber < rightNumber;
+            case "<=": return leftNumber <= rightNumber;
+            case ">": return leftNumber > rightNumber;
+            default: return leftNumber >= rightNumber;   // ">="
         }
     }
 
-    // Egy sor végrehajtása + naplózása; if/while esetén a feltétel értékével tér vissza
-    bool Do(Cmd c)
+    // ---------- Egy sor végrehajtása ----------
+
+    // Végrehajt egy sort és bejegyzi a naplóba (sorszám, API-hívás, esetleges hibakód).
+    // Hiba esetén leállítja a futást.
+    // Visszatérési érték: if / while esetén a feltétel értéke, egyébként false.
+    bool ExecuteLine(Command command)
     {
-        api = null; string err = null; bool cond = false;
+        currentApiCall = null;
+        string errorCodeOfThisLine = null;
+        bool conditionValue = false;
+
         try
         {
-            switch (c.T)
+            switch (command.Type)
             {
-                case "step":
-                    {
-                        api = "step forward"; var p = Rd(c.A[0]); api += " " + F(p);
-                        if (!(p is int n) || n < 0) throw new E("E_BAD_ARG");
-                        for (int k = 0; k < n; k++)
-                        {
-                            if (Front() == 1) throw new E("E_BEDROCK_HIT");
-                            pr += DR[dir]; pc += DC[dir]; Exp[pr, pc] = true;
-                        }
-                        break;
-                    }
-                case "turn":
-                    {
-                        api = "turn by"; var p = Rd(c.A[0]); api += " " + F(p);
-                        if (!(p is int n) || n < 0) throw new E("E_BAD_ARG");
-                        dir = (dir + n % 4) % 4; break;
-                    }
-                case "mine":
-                    api = "mine here";
-                    if (Cell(pr, pc) != 2) throw new E("E_NO_GOLD");
-                    G[pr, pc] = '.'; Gold++; break;
-                case "print":
-                    { api = "print"; var p = Rd(c.A[0]); api += " " + F(p); Out.Add(F(p)); break; }
-                case "set":
-                    {
-                        var v = Eval(c.A.Skip(1).ToArray());
-                        if (V.TryGetValue(c.A[0], out var old) && old.GetType() != v.GetType()) throw new E("E_TYPE_MISMATCH");
-                        V[c.A[0]] = v; break;
-                    }
+                case CommandType.Step:
+                    ExecuteStep(command);
+                    break;
+                case CommandType.Turn:
+                    ExecuteTurn(command);
+                    break;
+                case CommandType.Mine:
+                    ExecuteMine();
+                    break;
+                case CommandType.Print:
+                    ExecutePrint(command);
+                    break;
+                case CommandType.Set:
+                    ExecuteSet(command);
+                    break;
                 default:
-                    {
-                        var p = Rd(c.A[0]);
-                        if (!(p is bool b)) throw new E("E_NON_BOOL_CONDITION");
-                        cond = b; break;
-                    }
+                    // if / while: a feltétel kiértékelése
+                    conditionValue = EvaluateCondition(command);
+                    break;
             }
         }
-        catch (E e) { err = e.Code; }
-        Log.Add(c.Line + (api != null ? " " + api : "") + (err != null ? " " + err : ""));
-        if (err != null) { Stop = true; Err = err; }
-        return cond;
-    }
-
-    bool Begin()
-    {
-        if (Count >= 1000)
+        catch (InterpreterException exception)
         {
-            Log.Add("INSTRUCTION_COUNT_LIMIT_EXCEEDED"); Stop = Limit = true; Err = "INSTRUCTION_COUNT_LIMIT_EXCEEDED"; return false;
+            errorCodeOfThisLine = exception.ErrorCode;
         }
-        Count++; return true;
-    }
 
-    public void Finish() { if (!Limit) Log.Add("EOR"); Done = true; }
-
-    // Végrehajtás generátorként: minden utasítás VÉGREHAJTÁSA ELŐTT visszaadja a sor számát (nyomkövetés).
-    public IEnumerable<int> Run(List<Cmd> prog) { L.Num(prog); return Exec(prog); }
-
-    IEnumerable<int> Exec(List<Cmd> list)
-    {
-        foreach (var c in list)
+        string logLine = command.LineNumber.ToString();
+        if (currentApiCall != null)
         {
-            foreach (var x in ExecCmd(c)) yield return x;
-            if (Stop) yield break;
+            logLine += " " + currentApiCall;
+        }
+        if (errorCodeOfThisLine != null)
+        {
+            logLine += " " + errorCodeOfThisLine;
+        }
+        Log.Add(logLine);
+
+        if (errorCodeOfThisLine != null)
+        {
+            Stopped = true;
+            ErrorCode = errorCodeOfThisLine;
+        }
+
+        return conditionValue;
+    }
+
+    // step forward N: N lépés előre; falnak ütközve hiba.
+    void ExecuteStep(Command command)
+    {
+        currentApiCall = "step forward";
+        object argument = ReadValue(command.Arguments[0]);
+        currentApiCall += " " + FormatValue(argument);
+
+        if (!(argument is int) || (int)argument < 0)
+        {
+            throw new InterpreterException("E_BAD_ARG");
+        }
+        int stepCount = (int)argument;
+
+        for (int i = 0; i < stepCount; i++)
+        {
+            if (GetFrontCellType() == CellWall)
+            {
+                throw new InterpreterException("E_BEDROCK_HIT");
+            }
+            RobotRow += RowChangePerDirection[Direction];
+            RobotColumn += ColumnChangePerDirection[Direction];
+            Explored[RobotRow, RobotColumn] = true;
         }
     }
 
-    IEnumerable<int> ExecCmd(Cmd c)
+    // turn by N: N-szer fordul balra (negyedfordulat).
+    void ExecuteTurn(Command command)
+    {
+        currentApiCall = "turn by";
+        object argument = ReadValue(command.Arguments[0]);
+        currentApiCall += " " + FormatValue(argument);
+
+        if (!(argument is int) || (int)argument < 0)
+        {
+            throw new InterpreterException("E_BAD_ARG");
+        }
+        int quarterTurns = (int)argument;
+
+        Direction = (Direction + quarterTurns % 4) % 4;
+    }
+
+    // mine here: a robot alatti aranyat kibányássza.
+    void ExecuteMine()
+    {
+        currentApiCall = "mine here";
+        if (GetCellType(RobotRow, RobotColumn) != CellGold)
+        {
+            throw new InterpreterException("E_NO_GOLD");
+        }
+        Grid[RobotRow, RobotColumn] = '.';
+        CollectedGold++;
+    }
+
+    // print X: az érték a konzolkimenetre kerül.
+    void ExecutePrint(Command command)
+    {
+        currentApiCall = "print";
+        object value = ReadValue(command.Arguments[0]);
+        currentApiCall += " " + FormatValue(value);
+        Output.Add(FormatValue(value));
+    }
+
+    // set V to <kifejezés>: a változó típusa nem változhat meg egy értékadással.
+    void ExecuteSet(Command command)
+    {
+        string variableName = command.Arguments[0];
+        string[] expression = command.Arguments.Skip(1).ToArray();
+
+        object newValue = EvaluateExpression(expression);
+
+        object oldValue;
+        if (Variables.TryGetValue(variableName, out oldValue) && oldValue.GetType() != newValue.GetType())
+        {
+            throw new InterpreterException("E_TYPE_MISMATCH");
+        }
+        Variables[variableName] = newValue;
+    }
+
+    // if / while feltétele: bool értéknek kell lennie.
+    bool EvaluateCondition(Command command)
+    {
+        object value = ReadValue(command.Arguments[0]);
+        if (!(value is bool))
+        {
+            throw new InterpreterException("E_NON_BOOL_CONDITION");
+        }
+        return (bool)value;
+    }
+
+    // ---------- Utasításszám-limit és a futás lezárása ----------
+
+    // Utasítás végrehajtása előtt hívandó. Hamis, ha elértük a limitet (ilyenkor a futás leáll).
+    bool TryCountInstruction()
+    {
+        if (InstructionCount >= MaxInstructionCount)
+        {
+            Log.Add("INSTRUCTION_COUNT_LIMIT_EXCEEDED");
+            Stopped = true;
+            LimitExceeded = true;
+            ErrorCode = "INSTRUCTION_COUNT_LIMIT_EXCEEDED";
+            return false;
+        }
+        InstructionCount++;
+        return true;
+    }
+
+    // A futás normál végén hívandó: "EOR" kerül a naplóba (limit miatti leállásnál nem).
+    public void Finish()
+    {
+        if (!LimitExceeded)
+        {
+            Log.Add("EOR");
+        }
+        Finished = true;
+    }
+
+    // ---------- Végrehajtás (generátorokkal) ----------
+
+    // A program futtatása generátorként: minden utasítás VÉGREHAJTÁSA ELŐTT
+    // visszaadja a végrehajtandó sor számát (nyomkövetéshez).
+    public IEnumerable<int> Run(List<Command> program)
+    {
+        Language.AssignLineNumbers(program);
+        return ExecuteBlock(program);
+    }
+
+    // Blokk (utasítássorozat) végrehajtása, sorról sorra.
+    IEnumerable<int> ExecuteBlock(List<Command> commands)
+    {
+        foreach (Command command in commands)
+        {
+            foreach (int lineNumber in ExecuteCommand(command))
+            {
+                yield return lineNumber;
+            }
+
+            if (Stopped)
+            {
+                yield break;
+            }
+        }
+    }
+
+    IEnumerable<int> ExecuteCommand(Command command)
+    {
+        if (command.Type == CommandType.While)
+        {
+            return ExecuteWhile(command);
+        }
+        if (command.Type == CommandType.If)
+        {
+            return ExecuteIf(command);
+        }
+        return ExecuteSimpleCommand(command);
+    }
+
+    // step / turn / mine / print / set
+    IEnumerable<int> ExecuteSimpleCommand(Command command)
+    {
+        yield return command.LineNumber;
+
+        if (!TryCountInstruction())
+        {
+            yield break;
+        }
+        ExecuteLine(command);
+    }
+
+    // while: a feltétel minden körben újra kiértékelődik (és újra számít utasításnak).
+    IEnumerable<int> ExecuteWhile(Command command)
     {
         while (true)
         {
-            yield return c.Line;
-            if (!Begin()) yield break;
-            bool cond = Do(c);
-            if (Stop) yield break;
-            if (c.T == "while")
+            yield return command.LineNumber;
+
+            if (!TryCountInstruction())
             {
-                if (!cond) yield break;
-                foreach (var x in Exec(c.Body)) yield return x;
-                if (Stop) yield break;
-                continue;
+                yield break;
             }
-            if (c.T == "if")
+
+            bool condition = ExecuteLine(command);
+            if (Stopped)
             {
-                if (cond) { foreach (var x in Exec(c.Body)) yield return x; }
-                else if (c.Else != null)
-                {
-                    yield return c.ElseLine;
-                    if (!Begin()) yield break;
-                    Log.Add(c.ElseLine.ToString());
-                    foreach (var x in Exec(c.Else)) yield return x;
-                }
+                yield break;
             }
-            yield break;
+            if (!condition)
+            {
+                yield break;
+            }
+
+            foreach (int lineNumber in ExecuteBlock(command.Body))
+            {
+                yield return lineNumber;
+            }
+            if (Stopped)
+            {
+                yield break;
+            }
         }
     }
 
-    // Kézi vezérlés (nincs naplózás, ütközésnél hiba nélkül megáll). Üzenettel tér vissza.
-    public string Manual(string cmd, int n)
+    // if: igaz feltételnél a törzs fut, hamisnál (ha van) az else ág.
+    IEnumerable<int> ExecuteIf(Command command)
     {
-        switch (cmd)
+        yield return command.LineNumber;
+
+        if (!TryCountInstruction())
+        {
+            yield break;
+        }
+
+        bool condition = ExecuteLine(command);
+        if (Stopped)
+        {
+            yield break;
+        }
+
+        if (condition)
+        {
+            foreach (int lineNumber in ExecuteBlock(command.Body))
+            {
+                yield return lineNumber;
+            }
+        }
+        else if (command.ElseBody != null)
+        {
+            // Az "else" sor is utasításnak számít, és külön naplósor is jár neki.
+            yield return command.ElseLineNumber;
+
+            if (!TryCountInstruction())
+            {
+                yield break;
+            }
+            Log.Add(command.ElseLineNumber.ToString());
+
+            foreach (int lineNumber in ExecuteBlock(command.ElseBody))
+            {
+                yield return lineNumber;
+            }
+        }
+    }
+
+    // ---------- Kézi vezérlés ----------
+
+    // Kézi vezérlés: nincs naplózás, falnak ütközésnél hiba nélkül megáll.
+    // command: "f" = előre, "l" = balra fordul, egyéb = bányászik. Üzenettel tér vissza.
+    public string ManualControl(string command, int amount)
+    {
+        switch (command)
         {
             case "f":
-                for (int k = 0; k < n; k++)
+                for (int i = 0; i < amount; i++)
                 {
-                    if (Front() == 1) return "Falnak ütköztél, a robot megállt.";
-                    pr += DR[dir]; pc += DC[dir]; Exp[pr, pc] = true;
+                    if (GetFrontCellType() == CellWall)
+                    {
+                        return "Falnak ütköztél, a robot megállt.";
+                    }
+                    RobotRow += RowChangePerDirection[Direction];
+                    RobotColumn += ColumnChangePerDirection[Direction];
+                    Explored[RobotRow, RobotColumn] = true;
                 }
                 return "Lépés kész.";
-            case "l": dir = (dir + n % 4) % 4; return "Fordulás kész.";
+
+            case "l":
+                Direction = (Direction + amount % 4) % 4;
+                return "Fordulás kész.";
+
             default:
-                if (Cell(pr, pc) != 2) return "Itt nincs arany.";
-                G[pr, pc] = '.'; Gold++; return "Aranyrög kibányászva.";
+                if (GetCellType(RobotRow, RobotColumn) != CellGold)
+                {
+                    return "Itt nincs arany.";
+                }
+                Grid[RobotRow, RobotColumn] = '.';
+                CollectedGold++;
+                return "Aranyrög kibányászva.";
         }
     }
 }

@@ -3,173 +3,452 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-// Egy program-blokk (utasítás). Az "if" Else listája null, ha nincs else ág.
-class Cmd
+// A programblokkok (utasítások) lehetséges típusai.
+static class CommandType
 {
-    public string T;                       // step, turn, mine, print, set, if, while
-    public string[] A = new string[0];     // mezők (set: A[0]=ident, A[1..]=kifejezés tokenek)
-    public List<Cmd> Body = new List<Cmd>();
-    public List<Cmd> Else;
-    public int Line, ElseLine;
+    public const string Step = "step";
+    public const string Turn = "turn";
+    public const string Mine = "mine";
+    public const string Print = "print";
+    public const string Set = "set";
+    public const string If = "if";
+    public const string While = "while";
+}
 
-    public string Head()
+// Egy programblokk (utasítás).
+// Az "if" ElseBody listája null, ha nincs else ág.
+class Command
+{
+    public string Type;                                    // lásd: CommandType
+    public string[] Arguments = new string[0];             // a blokk mezői (set: [0] = változónév, [1..] = kifejezés tokenek)
+    public List<Command> Body = new List<Command>();       // if / while törzse
+    public List<Command> ElseBody;                         // csak if esetén, ha van else ág
+    public int LineNumber;                                 // a sor száma a szöveges kódban
+    public int ElseLineNumber;                             // az "else" sor száma a szöveges kódban
+
+    // Igaz, ha a blokknak van törzse (if vagy while).
+    public bool IsControlBlock
     {
-        switch (T)
+        get { return Type == CommandType.If || Type == CommandType.While; }
+    }
+
+    // A blokk szöveges forráskódként (egy sor, behúzás nélkül).
+    public string ToSourceText()
+    {
+        switch (Type)
         {
-            case "step": return "step forward " + A[0];
-            case "turn": return "turn by " + A[0];
-            case "mine": return "mine here";
-            case "print": return "print " + A[0];
-            case "set": return "set " + A[0] + " to " + string.Join(" ", A.Skip(1));
-            case "if": return "if " + A[0];
-            default: return "while " + A[0];
+            case CommandType.Step:
+                return "step forward " + Arguments[0];
+
+            case CommandType.Turn:
+                return "turn by " + Arguments[0];
+
+            case CommandType.Mine:
+                return "mine here";
+
+            case CommandType.Print:
+                return "print " + Arguments[0];
+
+            case CommandType.Set:
+                {
+                    string expression = string.Join(" ", Arguments.Skip(1));
+                    return "set " + Arguments[0] + " to " + expression;
+                }
+
+            case CommandType.If:
+                return "if " + Arguments[0];
+
+            case CommandType.While:
+            default:
+                return "while " + Arguments[0];
         }
     }
-    // Blokk-nézet: a szerkeszthető mezők [szögletes zárójelben]
-    public string Blk()
+
+    // A blokk a blokk-nézetben: a szerkeszthető mezők [szögletes zárójelben] vannak.
+    public string ToBlockViewText()
     {
-        switch (T)
+        switch (Type)
         {
-            case "step": return "step forward [" + A[0] + "]";
-            case "turn": return "turn by [" + A[0] + "]";
-            case "mine": return "mine here";
-            case "print": return "print [" + A[0] + "]";
-            case "set": return "set [" + A[0] + "] to " + string.Join(" ", A.Skip(1).Select(x => L.Ops.Contains(x) ? x : "[" + x + "]"));
-            case "if": return "if [" + A[0] + "]" + (Else != null ? "  (if-else)" : "");
-            default: return "while [" + A[0] + "]";
+            case CommandType.Step:
+                return "step forward [" + Arguments[0] + "]";
+
+            case CommandType.Turn:
+                return "turn by [" + Arguments[0] + "]";
+
+            case CommandType.Mine:
+                return "mine here";
+
+            case CommandType.Print:
+                return "print [" + Arguments[0] + "]";
+
+            case CommandType.Set:
+                {
+                    // A műveleti jelek (és az isThere / not) nem szerkeszthetők, ezért nem kapnak zárójelet.
+                    var expressionParts = new List<string>();
+                    foreach (string token in Arguments.Skip(1))
+                    {
+                        if (Language.Operators.Contains(token))
+                        {
+                            expressionParts.Add(token);
+                        }
+                        else
+                        {
+                            expressionParts.Add("[" + token + "]");
+                        }
+                    }
+                    return "set [" + Arguments[0] + "] to " + string.Join(" ", expressionParts);
+                }
+
+            case CommandType.If:
+                {
+                    string text = "if [" + Arguments[0] + "]";
+                    if (ElseBody != null)
+                    {
+                        text += "  (if-else)";
+                    }
+                    return text;
+                }
+
+            case CommandType.While:
+            default:
+                return "while [" + Arguments[0] + "]";
         }
     }
 }
 
-static class L
+// Egy beolvasott forrássor: a behúzás mértéke és a szavakra (tokenekre) bontott tartalma.
+class SourceLine
 {
-    public static readonly HashSet<string> Kws = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "and","by","else","false","forward","here","if","isThere","mine","not","or","print","set","step","to","true","turn","while" };
-    public static readonly HashSet<string> BinOps = new HashSet<string> { "+", "-", "*", "=", "<>", "<", "<=", ">", ">=", "and", "or" };
-    public static readonly HashSet<string> Ops = new HashSet<string>(BinOps) { "isThere", "not" };
+    public int Indent;
+    public string[] Tokens;
+}
 
-    public static bool Ident(string s) => Regex.IsMatch(s, @"^[A-Za-z][A-Za-z0-9]*$") && !Kws.Contains(s);
-    public static bool Simple(string s) =>
-        s == "true" || s == "false" || (Regex.IsMatch(s, @"^[0-9]{1,3}$") && int.Parse(s) <= 100) || Ident(s);
+// A nyelv szabályai: kulcsszavak, validáció, beolvasás, kiírás.
+static class Language
+{
+    // A szerkesztőparancsokban használható "if-else blokk" kulcsszó (a programban ez "if" típusú, else ággal).
+    const string IfElseKeyword = "ifelse";
 
-    // null = érvényes blokk, különben hibaüzenet. ("ifelse X" = if-else blokk)
-    public static string Validate(string[] t)
+    public static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        if (t.Length == 0) return "Üres blokk.";
-        bool ok;
+        "and", "by", "else", "false", "forward", "here", "if", "isThere", "mine",
+        "not", "or", "print", "set", "step", "to", "true", "turn", "while"
+    };
+
+    // Kétoperandusú műveletek.
+    public static readonly HashSet<string> BinaryOperators = new HashSet<string>
+    {
+        "+", "-", "*", "=", "<>", "<", "<=", ">", ">=", "and", "or"
+    };
+
+    // Minden művelet (a kétoperandusúak + az egyoperandusúak).
+    public static readonly HashSet<string> Operators = new HashSet<string>(BinaryOperators) { "isThere", "not" };
+
+    // Azonosító: betűvel kezdődik, betű/szám követi, és nem kulcsszó.
+    public static bool IsIdentifier(string text)
+    {
+        bool hasValidShape = Regex.IsMatch(text, @"^[A-Za-z][A-Za-z0-9]*$");
+        return hasValidShape && !Keywords.Contains(text);
+    }
+
+    // "Egyszerű érték": true / false, 0..100 közötti szám vagy azonosító.
+    public static bool IsSimpleValue(string text)
+    {
+        if (text == "true" || text == "false")
+        {
+            return true;
+        }
+
+        bool looksLikeNumber = Regex.IsMatch(text, @"^[0-9]{1,3}$");
+        if (looksLikeNumber && int.Parse(text) <= 100)
+        {
+            return true;
+        }
+
+        return IsIdentifier(text);
+    }
+
+    // A "set <változó> to ..." jobb oldala érvényes-e:
+    //   <érték>  |  isThere <érték>  |  not <érték>  |  <érték> <művelet> <érték>
+    static bool IsValidSetExpression(string[] expression)
+    {
+        if (expression.Length == 1)
+        {
+            return IsSimpleValue(expression[0]);
+        }
+
+        if (expression.Length == 2)
+        {
+            bool hasUnaryOperator = expression[0] == "isThere" || expression[0] == "not";
+            return hasUnaryOperator && IsSimpleValue(expression[1]);
+        }
+
+        if (expression.Length == 3)
+        {
+            return IsSimpleValue(expression[0])
+                && BinaryOperators.Contains(expression[1])
+                && IsSimpleValue(expression[2]);
+        }
+
+        return false;
+    }
+
+    // Visszatérési érték: null, ha érvényes a blokk, különben a hibaüzenet.
+    // ("ifelse X" = if-else blokk)
+    public static string Validate(string[] tokens)
+    {
+        if (tokens.Length == 0)
+        {
+            return "Üres blokk.";
+        }
+
+        bool isValid;
         string usage;
-        switch (t[0])
+
+        switch (tokens[0])
         {
-            case "step": ok = t.Length == 3 && t[1] == "forward" && Simple(t[2]); usage = "step forward <érték>"; break;
-            case "turn": ok = t.Length == 3 && t[1] == "by" && Simple(t[2]); usage = "turn by <érték>"; break;
-            case "mine": ok = t.Length == 2 && t[1] == "here"; usage = "mine here"; break;
-            case "print": ok = t.Length == 2 && Simple(t[1]); usage = "print <érték>"; break;
-            case "if": case "ifelse": case "while": ok = t.Length == 2 && Simple(t[1]); usage = t[0] + " <érték>"; break;
-            case "set":
-                usage = "set <változó> to <érték | isThere x | not x | x művelet y>";
-                if (t.Length < 4 || t[2] != "to") { ok = false; break; }
-                if (!Ident(t[1])) return "Érvénytelen változónév (kulcsszó vagy hibás azonosító): " + t[1];
-                var e = t.Skip(3).ToArray();
-                ok = (e.Length == 1 && Simple(e[0])) ||
-                     (e.Length == 2 && (e[0] == "isThere" || e[0] == "not") && Simple(e[1])) ||
-                     (e.Length == 3 && Simple(e[0]) && BinOps.Contains(e[1]) && Simple(e[2]));
+            case CommandType.Step:
+                usage = "step forward <érték>";
+                isValid = tokens.Length == 3 && tokens[1] == "forward" && IsSimpleValue(tokens[2]);
                 break;
-            default: return "Ismeretlen blokk: " + t[0];
-        }
-        return ok ? null : "Érvénytelen blokk / mező. Forma: " + usage + " (azonosító: betű+betű/szám, nem kulcsszó; szám: 0..100)";
-    }
 
-    public static Cmd From(string[] t)
-    {
-        var c = new Cmd();
-        switch (t[0])
-        {
-            case "step": case "turn": c.T = t[0]; c.A = new[] { t[2] }; break;
-            case "mine": c.T = "mine"; break;
-            case "print": case "if": case "while": c.T = t[0]; c.A = new[] { t[1] }; break;
-            case "ifelse": c.T = "if"; c.A = new[] { t[1] }; c.Else = new List<Cmd>(); break;
-            case "set": c.T = "set"; c.A = new[] { t[1] }.Concat(t.Skip(3)).ToArray(); break;
-        }
-        return c;
-    }
+            case CommandType.Turn:
+                usage = "turn by <érték>";
+                isValid = tokens.Length == 3 && tokens[1] == "by" && IsSimpleValue(tokens[2]);
+                break;
 
-    public static List<Cmd> Parse(IEnumerable<string> src)
-    {
-        var ls = new List<(int ind, string[] t)>();
-        foreach (var raw in src)
-        {
-            var s = raw.TrimEnd();
-            if (s.Length == 0) continue;
-            int ind = s.Length - s.TrimStart(' ').Length;
-            ls.Add((ind, s.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)));
-        }
-        int i = 0;
-        return ParseBlock(ls, ref i, 0);
-    }
+            case CommandType.Mine:
+                usage = "mine here";
+                isValid = tokens.Length == 2 && tokens[1] == "here";
+                break;
 
-    static List<Cmd> ParseBlock(List<(int ind, string[] t)> ls, ref int i, int ind)
-    {
-        var r = new List<Cmd>();
-        while (i < ls.Count && ls[i].ind == ind && ls[i].t[0] != "else")
-        {
-            var c = From(ls[i].t); i++;
-            if (c.T == "if" || c.T == "while")
-            {
-                if (i < ls.Count && ls[i].ind > ind) c.Body = ParseBlock(ls, ref i, ls[i].ind);
-                if (c.T == "if" && i < ls.Count && ls[i].ind == ind && ls[i].t[0] == "else")
+            case CommandType.Print:
+                usage = "print <érték>";
+                isValid = tokens.Length == 2 && IsSimpleValue(tokens[1]);
+                break;
+
+            case CommandType.If:
+            case IfElseKeyword:
+            case CommandType.While:
+                usage = tokens[0] + " <érték>";
+                isValid = tokens.Length == 2 && IsSimpleValue(tokens[1]);
+                break;
+
+            case CommandType.Set:
+                usage = "set <változó> to <érték | isThere x | not x | x művelet y>";
+                if (tokens.Length < 4 || tokens[2] != "to")
                 {
-                    i++; c.Else = new List<Cmd>();
-                    if (i < ls.Count && ls[i].ind > ind) c.Else = ParseBlock(ls, ref i, ls[i].ind);
+                    isValid = false;
+                    break;
+                }
+                if (!IsIdentifier(tokens[1]))
+                {
+                    return "Érvénytelen változónév (kulcsszó vagy hibás azonosító): " + tokens[1];
+                }
+                isValid = IsValidSetExpression(tokens.Skip(3).ToArray());
+                break;
+
+            default:
+                return "Ismeretlen blokk: " + tokens[0];
+        }
+
+        if (isValid)
+        {
+            return null;
+        }
+        return "Érvénytelen blokk / mező. Forma: " + usage + " (azonosító: betű+betű/szám, nem kulcsszó; szám: 0..100)";
+    }
+
+    // Tokenekből blokkot (Command) készít. A tokeneknek előbb át kell menniük a Validate-en.
+    public static Command CreateCommand(string[] tokens)
+    {
+        var command = new Command();
+
+        switch (tokens[0])
+        {
+            case CommandType.Step:
+            case CommandType.Turn:
+                // "step forward X" / "turn by X": az érték a harmadik token
+                command.Type = tokens[0];
+                command.Arguments = new[] { tokens[2] };
+                break;
+
+            case CommandType.Mine:
+                command.Type = CommandType.Mine;
+                break;
+
+            case CommandType.Print:
+            case CommandType.If:
+            case CommandType.While:
+                command.Type = tokens[0];
+                command.Arguments = new[] { tokens[1] };
+                break;
+
+            case IfElseKeyword:
+                // Ez is "if" típusú, de üres else ággal.
+                command.Type = CommandType.If;
+                command.Arguments = new[] { tokens[1] };
+                command.ElseBody = new List<Command>();
+                break;
+
+            case CommandType.Set:
+                // "set V to <kifejezés>": [0] = V, utána a kifejezés tokenjei (a "to" kimarad)
+                command.Type = CommandType.Set;
+                command.Arguments = new[] { tokens[1] }.Concat(tokens.Skip(3)).ToArray();
+                break;
+        }
+
+        return command;
+    }
+
+    // ---------- Beolvasás szöveges forráskódból ----------
+
+    public static List<Command> ParseSource(IEnumerable<string> sourceLines)
+    {
+        var lines = new List<SourceLine>();
+
+        foreach (string rawLine in sourceLines)
+        {
+            string line = rawLine.TrimEnd();
+            if (line.Length == 0)
+            {
+                continue; // az üres sorokat kihagyjuk
+            }
+
+            int indent = line.Length - line.TrimStart(' ').Length;
+            string[] tokens = line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            lines.Add(new SourceLine { Indent = indent, Tokens = tokens });
+        }
+
+        int position = 0;
+        return ParseBlock(lines, ref position, 0);
+    }
+
+    // Egy azonos behúzású blokk-sorozatot olvas be, a 'position' sortól kezdve.
+    // Az "else" sornál megáll (azt az if feldolgozása kezeli).
+    static List<Command> ParseBlock(List<SourceLine> lines, ref int position, int indent)
+    {
+        var commands = new List<Command>();
+
+        while (position < lines.Count
+               && lines[position].Indent == indent
+               && lines[position].Tokens[0] != "else")
+        {
+            Command command = CreateCommand(lines[position].Tokens);
+            position++;
+
+            if (command.IsControlBlock)
+            {
+                // A törzs a következő, nagyobb behúzású sorokból áll.
+                if (position < lines.Count && lines[position].Indent > indent)
+                {
+                    command.Body = ParseBlock(lines, ref position, lines[position].Indent);
+                }
+
+                // Az if után közvetlenül, azonos behúzással jöhet az "else".
+                bool hasElseLine = command.Type == CommandType.If
+                                   && position < lines.Count
+                                   && lines[position].Indent == indent
+                                   && lines[position].Tokens[0] == "else";
+                if (hasElseLine)
+                {
+                    position++;
+                    command.ElseBody = new List<Command>();
+                    if (position < lines.Count && lines[position].Indent > indent)
+                    {
+                        command.ElseBody = ParseBlock(lines, ref position, lines[position].Indent);
+                    }
                 }
             }
-            r.Add(c);
+
+            commands.Add(command);
         }
-        return r;
+
+        return commands;
     }
 
-    public static int Num(List<Cmd> p, int n = 0)
-    {
-        foreach (var c in p)
-        {
-            c.Line = ++n; n = Num(c.Body, n);
-            if (c.Else != null) { c.ElseLine = ++n; n = Num(c.Else, n); }
-        }
-        return n;
-    }
+    // ---------- Sorszámozás ----------
 
-    // Szöveges forráskód (2 szóköz behúzás)
-    public static List<string> Text(List<Cmd> p)
+    // Sorszámot ad minden blokknak (és az else soroknak), a szöveges kód sorrendjében.
+    // Visszatérési érték: az utolsó kiosztott sorszám.
+    public static int AssignLineNumbers(List<Command> commands, int lastNumber = 0)
     {
-        var o = new List<string>(); Rend(p, 0, o); return o;
-    }
-    static void Rend(List<Cmd> p, int ind, List<string> o)
-    {
-        var sp = new string(' ', ind);
-        foreach (var c in p)
+        foreach (Command command in commands)
         {
-            o.Add(sp + c.Head()); Rend(c.Body, ind + 2, o);
-            if (c.Else != null) { o.Add(sp + "else"); Rend(c.Else, ind + 2, o); }
-        }
-    }
+            lastNumber++;
+            command.LineNumber = lastNumber;
+            lastNumber = AssignLineNumbers(command.Body, lastNumber);
 
-    // Blokk-nézet útvonal-címkékkel (ezekkel lehet a szerkesztőparancsokban hivatkozni a pozíciókra)
-    public static void Blocks(List<Cmd> p, string pre, int ind, List<string> o)
-    {
-        var sp = new string(' ', ind);
-        for (int i = 0; i < p.Count; i++)
-        {
-            var c = p[i]; string path = pre + (i + 1);
-            o.Add(sp + "┌ " + path.PadRight(6) + c.Blk());
-            if (c.T == "if" || c.T == "while")
+            if (command.ElseBody != null)
             {
-                if (c.Body.Count == 0) o.Add(sp + "│   (üres blokk: " + path + ")");
-                Blocks(c.Body, path + ".", ind + 4, o);
-                if (c.Else != null)
+                lastNumber++;
+                command.ElseLineNumber = lastNumber;
+                lastNumber = AssignLineNumbers(command.ElseBody, lastNumber);
+            }
+        }
+        return lastNumber;
+    }
+
+    // ---------- Szöveges forráskód előállítása (2 szóköz behúzással) ----------
+
+    public static List<string> RenderSourceCode(List<Command> commands)
+    {
+        var output = new List<string>();
+        RenderSourceCodeInto(commands, 0, output);
+        return output;
+    }
+
+    static void RenderSourceCodeInto(List<Command> commands, int indent, List<string> output)
+    {
+        string indentText = new string(' ', indent);
+
+        foreach (Command command in commands)
+        {
+            output.Add(indentText + command.ToSourceText());
+            RenderSourceCodeInto(command.Body, indent + 2, output);
+
+            if (command.ElseBody != null)
+            {
+                output.Add(indentText + "else");
+                RenderSourceCodeInto(command.ElseBody, indent + 2, output);
+            }
+        }
+    }
+
+    // ---------- Blokk-nézet ----------
+
+    // Útvonal-címkékkel ellátott blokk-nézet. Ezekkel a címkékkel lehet hivatkozni
+    // a pozíciókra a szerkesztőparancsokban (pl. 3, 3.2, 3.e.1).
+    public static void BuildBlockView(List<Command> commands, string pathPrefix, int indent, List<string> output)
+    {
+        string indentText = new string(' ', indent);
+
+        for (int i = 0; i < commands.Count; i++)
+        {
+            Command command = commands[i];
+            string path = pathPrefix + (i + 1);
+
+            output.Add(indentText + "┌ " + path.PadRight(6) + command.ToBlockViewText());
+
+            if (!command.IsControlBlock)
+            {
+                continue;
+            }
+
+            if (command.Body.Count == 0)
+            {
+                output.Add(indentText + "│   (üres blokk: " + path + ")");
+            }
+            BuildBlockView(command.Body, path + ".", indent + 4, output);
+
+            if (command.ElseBody != null)
+            {
+                output.Add(indentText + "│  else:");
+                if (command.ElseBody.Count == 0)
                 {
-                    o.Add(sp + "│  else:");
-                    if (c.Else.Count == 0) o.Add(sp + "│   (üres blokk: " + path + ".e)");
-                    Blocks(c.Else, path + ".e.", ind + 4, o);
+                    output.Add(indentText + "│   (üres blokk: " + path + ".e)");
                 }
+                BuildBlockView(command.ElseBody, path + ".e.", indent + 4, output);
             }
         }
     }

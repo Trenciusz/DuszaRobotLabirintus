@@ -8,115 +8,288 @@ using System.Threading;
 
 class Program
 {
-    static string inPath, outPath;
+    // ---------- Állapot ----------
+    static string inputPath;
+    static string outputPath;
     static string[] mapLines;
-    static List<Cmd> prog;
-    static Interp I;
-    static IEnumerator<int> en;   // aktív futás (nyomkövetés) – null, ha nincs
-    static int next;              // a következőként végrehajtandó sor
-    static int delay = 250;
+    static List<Command> program;
+    static Interpreter interpreter;
+
+    static IEnumerator<int> activeRun;          // az aktív futás (nyomkövetés) – null, ha nincs
+    static int nextLine;                        // a következőként végrehajtandó sor száma
+    static int stepDelayMilliseconds = 250;     // késleltetés a lassított futásnál
+
+    // ---------- Belépési pont ----------
 
     static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
-        bool quiet = args.Length > 0 && args[0] == "-q";
-        var a = quiet ? args.Skip(1).ToArray() : args;
-        if (a.Length < 2) { Console.WriteLine("Használat: robot [-q] input.txt output.txt"); return 1; }
-        inPath = a[0]; outPath = a[1];
-        Load();
-        if (quiet)
+
+        bool quietMode = args.Length > 0 && args[0] == "-q";
+        string[] arguments;
+        if (quietMode)
         {
-            I.Reset();
-            foreach (var _ in I.Run(prog)) { }
-            I.Finish(); WriteLog();
+            arguments = args.Skip(1).ToArray();
+        }
+        else
+        {
+            arguments = args;
+        }
+
+        if (arguments.Length < 2)
+        {
+            Console.WriteLine("Használat: robot [-q] input.txt output.txt");
+            return 1;
+        }
+
+        inputPath = arguments[0];
+        outputPath = arguments[1];
+        Load();
+
+        if (quietMode)
+        {
+            // Csendes mód: lefuttatja a programot, kiírja a naplót, nincs interaktív rész.
+            interpreter.Reset();
+            foreach (int executedLine in interpreter.Run(program))
+            {
+            }
+            interpreter.Finish();
+            WriteLog();
             return 0;
         }
-        Repl();
+
+        RunInteractiveLoop();
         return 0;
     }
 
+    // Beolvassa az input fájlt: az első sor a térkép mérete, utána a térkép, végül a program.
     static void Load()
     {
-        var lines = File.ReadAllLines(inPath).Select(s => s.TrimEnd('\r')).ToList();
-        var d = lines[0].Trim().Split(' ');
-        int r = int.Parse(d[0]);
-        mapLines = lines.Skip(1).Take(r).Select(s => s.TrimEnd()).ToArray();
-        prog = L.Parse(lines.Skip(1 + r));
-        I = new Interp(mapLines); L.Num(prog);
+        List<string> fileLines = File.ReadAllLines(inputPath).Select(line => line.TrimEnd('\r')).ToList();
+
+        string[] sizeParts = fileLines[0].Trim().Split(' ');
+        int mapRowCount = int.Parse(sizeParts[0]);
+
+        mapLines = fileLines.Skip(1).Take(mapRowCount).Select(line => line.TrimEnd()).ToArray();
+        program = Language.ParseSource(fileLines.Skip(1 + mapRowCount));
+
+        interpreter = new Interpreter(mapLines);
+        Language.AssignLineNumbers(program);
     }
 
-    static void WriteLog() { File.WriteAllLines(outPath, I.Log); }
-
-    // ---------- futtatás ----------
-    static void Start() { I.Reset(); L.Num(prog); en = I.Run(prog).GetEnumerator(); next = 0; WriteLog(); }
-
-    static bool Adv()
+    static void WriteLog()
     {
-        if (en == null) return false;
-        if (en.MoveNext()) next = en.Current;
-        else { I.Finish(); en = null; next = 0; }
+        File.WriteAllLines(outputPath, interpreter.Log);
+    }
+
+    // ---------- Futtatás ----------
+
+    // Új futás indítása az alaphelyzetből (még egyetlen sort sem hajt végre).
+    static void StartRun()
+    {
+        interpreter.Reset();
+        Language.AssignLineNumbers(program);
+        activeRun = interpreter.Run(program).GetEnumerator();
+        nextLine = 0;
         WriteLog();
-        return en != null;
     }
 
-    static void RunSlow()
+    // Egy lépés előre a futásban. Igazat ad, ha a futás még tart.
+    static bool AdvanceRun()
     {
-        Start();
-        while (Adv())
+        if (activeRun == null)
+        {
+            return false;
+        }
+
+        if (activeRun.MoveNext())
+        {
+            nextLine = activeRun.Current;
+        }
+        else
+        {
+            interpreter.Finish();
+            activeRun = null;
+            nextLine = 0;
+        }
+
+        WriteLog();
+        return activeRun != null;
+    }
+
+    // Lassított futás: lépésenként újrarajzol, bármely billentyűre megszakítható.
+    static void RunSlowly()
+    {
+        StartRun();
+        while (AdvanceRun())
         {
             Redraw("Futtatás… (bármely billentyű: megszakítás)");
-            Thread.Sleep(delay);
-            try { if (Console.KeyAvailable) { Console.ReadKey(true); en = null; WriteLog(); Console.WriteLine("Megszakítva."); return; } } catch { }
+            Thread.Sleep(stepDelayMilliseconds);
+
+            try
+            {
+                if (Console.KeyAvailable)
+                {
+                    Console.ReadKey(true);
+                    activeRun = null;
+                    WriteLog();
+                    Console.WriteLine("Megszakítva.");
+                    return;
+                }
+            }
+            catch
+            {
+                // Ha a konzol nem interaktív, a billentyűfigyelés nem működik – ilyenkor nem szakítható meg.
+            }
         }
         Redraw("A futás befejeződött.");
     }
 
-    // ---------- megjelenítés ----------
+    // ---------- Megjelenítés ----------
+
     static void Redraw(string status)
     {
-        try { Console.Clear(); } catch { }
+        try
+        {
+            Console.Clear();
+        }
+        catch
+        {
+            // Ha a konzol nem törölhető (pl. átirányított kimenet), egyszerűen tovább írunk.
+        }
         Show(status);
+    }
+
+    // Egy cella jele a térképen: robot (nyíl), felfedezett cella (valódi jel) vagy '?'.
+    static char GetMapSymbol(int row, int column)
+    {
+        bool isRobotHere = row == interpreter.RobotRow && column == interpreter.RobotColumn;
+        if (isRobotHere)
+        {
+            return Interpreter.RobotArrows[interpreter.Direction];
+        }
+
+        if (interpreter.Explored[row, column])
+        {
+            return interpreter.Grid[row, column];
+        }
+        return '?';
+    }
+
+    // A robot előtti cella szöveges leírása.
+    static string DescribeFrontCell()
+    {
+        switch (interpreter.GetFrontCellType())
+        {
+            case Interpreter.CellWall:
+                return "fal";
+            case Interpreter.CellGold:
+                return "aranyrög";
+            default:
+                return "üres kamra";
+        }
+    }
+
+    static string DescribeVariables()
+    {
+        if (interpreter.Variables.Count == 0)
+        {
+            return "-";
+        }
+
+        var parts = new List<string>();
+        foreach (KeyValuePair<string, object> variable in interpreter.Variables)
+        {
+            parts.Add(variable.Key + "=" + Interpreter.FormatValue(variable.Value));
+        }
+        return string.Join(", ", parts);
+    }
+
+    // A konzolkimenet utolsó 15 sora.
+    static string DescribeConsoleOutput()
+    {
+        if (interpreter.Output.Count == 0)
+        {
+            return "-";
+        }
+
+        int firstShownIndex = Math.Max(0, interpreter.Output.Count - 15);
+        return string.Join(" | ", interpreter.Output.Skip(firstShownIndex));
     }
 
     static void Show(string status)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine("=== SZIMULÁTOR  (?=feltérképezetlen  .=üres  #=fal  @=arany  > ^ < v = robot) ===");
-        for (int i = 0; i < I.R; i++)
+        var text = new StringBuilder();
+
+        text.AppendLine("=== SZIMULÁTOR  (?=feltérképezetlen  .=üres  #=fal  @=arany  > ^ < v = robot) ===");
+
+        for (int row = 0; row < interpreter.Rows; row++)
         {
-            for (int j = 0; j < I.C; j++)
+            for (int column = 0; column < interpreter.Columns; column++)
             {
-                char ch = (i == I.pr && j == I.pc) ? Interp.Arrows[I.dir] : I.Exp[i, j] ? I.G[i, j] : '?';
-                sb.Append(ch).Append(' ');
+                text.Append(GetMapSymbol(row, column)).Append(' ');
             }
-            sb.AppendLine();
+            text.AppendLine();
         }
-        string[] nm = { "üres kamra", "fal", "aranyrög" };
-        sb.AppendLine($"Szenzor (a robot előtt): {nm[I.Front()]}   |   Kibányászott arany: {I.Gold}");
-        sb.AppendLine("Változók: " + (I.V.Count == 0 ? "-" : string.Join(", ", I.V.Select(kv => kv.Key + "=" + Interp.F(kv.Value)))));
-        sb.AppendLine("Konzol: " + (I.Out.Count == 0 ? "-" : string.Join(" | ", I.Out.Skip(Math.Max(0, I.Out.Count - 15)))));
-        if (I.Err != null) sb.AppendLine("HIBA: " + I.Err);
-        sb.AppendLine("Állapot: " + status);
-        Console.Write(sb.ToString());
+
+        text.AppendLine("Szenzor (a robot előtt): " + DescribeFrontCell() + "   |   Kibányászott arany: " + interpreter.CollectedGold);
+        text.AppendLine("Változók: " + DescribeVariables());
+        text.AppendLine("Konzol: " + DescribeConsoleOutput());
+
+        if (interpreter.ErrorCode != null)
+        {
+            text.AppendLine("HIBA: " + interpreter.ErrorCode);
+        }
+        text.AppendLine("Állapot: " + status);
+
+        Console.Write(text.ToString());
     }
 
+    // A szöveges forráskód sorszámokkal; a következőként végrehajtandó sort "=>" jelöli.
     static void ShowText()
     {
-        L.Num(prog);
-        var t = L.Text(prog); Console.WriteLine("=== SZÖVEGES FORRÁSKÓD ===");
-        for (int i = 0; i < t.Count; i++) Console.WriteLine((i + 1 == next && en != null ? "=> " : "   ") + (i + 1).ToString().PadLeft(3) + "  " + t[i]);
-        if (t.Count == 0) Console.WriteLine("   (üres program)");
+        Language.AssignLineNumbers(program);
+        List<string> sourceLines = Language.RenderSourceCode(program);
+
+        Console.WriteLine("=== SZÖVEGES FORRÁSKÓD ===");
+        for (int i = 0; i < sourceLines.Count; i++)
+        {
+            int lineNumber = i + 1;
+            bool isNextLine = lineNumber == nextLine && activeRun != null;
+
+            string marker;
+            if (isNextLine)
+            {
+                marker = "=> ";
+            }
+            else
+            {
+                marker = "   ";
+            }
+
+            Console.WriteLine(marker + lineNumber.ToString().PadLeft(3) + "  " + sourceLines[i]);
+        }
+
+        if (sourceLines.Count == 0)
+        {
+            Console.WriteLine("   (üres program)");
+        }
     }
 
     static void ShowBlocks()
     {
-        var o = new List<string>(); L.Blocks(prog, "", 0, o);
+        var blockLines = new List<string>();
+        Language.BuildBlockView(program, "", 0, blockLines);
+
         Console.WriteLine("=== BLOKK-NÉZET (a címkék a szerkesztő pozíciói) ===");
-        if (o.Count == 0) Console.WriteLine("(üres program – használd: add <blokk>)");
-        o.ForEach(Console.WriteLine);
+        if (blockLines.Count == 0)
+        {
+            Console.WriteLine("(üres program – használd: add <blokk>)");
+        }
+        blockLines.ForEach(Console.WriteLine);
     }
 
-    static void Help()
+    static void ShowHelp()
     {
         Console.WriteLine(@"PARANCSOK
  Nézetek:    text | blocks | map | log
@@ -135,138 +308,496 @@ class Program
  Egyéb:      help | exit");
     }
 
-    // ---------- szerkesztés ----------
-    static bool Locate(string path, out List<Cmd> list, out int idx, out int depth)
+    // ---------- Szerkesztés ----------
+
+    // Megkeresi a címnek (pl. "3.2.e.1") megfelelő pozíciót a programban.
+    //   containingList: az a lista, amelyben a cím szerinti pozíció van
+    //   index:          a pozíció indexe ebben a listában (lehet a lista hossza is: "a végére")
+    //   depth:          hány vezérlőblokk (if / while) veszi körül a listát
+    // Hamis, ha a cím érvénytelen.
+    static bool TryLocate(string path, out List<Command> containingList, out int index, out int depth)
     {
-        list = prog; idx = 0; depth = 0;
-        var tk = path.Split('.'); Cmd c = null; bool entered = true;
-        for (int k = 0; k < tk.Length; k++)
+        containingList = program;
+        index = 0;
+        depth = 0;
+
+        string[] pathParts = path.Split('.');
+        Command parentCommand = null;
+
+        // Igaz, ha a containingList már a megfelelő lista a következő számhoz;
+        // hamis, ha előbb a parentCommand törzsébe kell lépni.
+        bool listIsReady = true;
+
+        for (int k = 0; k < pathParts.Length; k++)
         {
-            if (tk[k] == "e")
+            bool isLastPart = k == pathParts.Length - 1;
+
+            if (pathParts[k] == "e")
             {
-                if (c == null || c.Else == null || k == tk.Length - 1) return false;
-                list = c.Else; entered = true; continue;
+                // "e": az előző blokk else ágába lépünk (utána még kell egy sorszám)
+                if (parentCommand == null || parentCommand.ElseBody == null || isLastPart)
+                {
+                    return false;
+                }
+                containingList = parentCommand.ElseBody;
+                listIsReady = true;
+                continue;
             }
-            if (!entered) { if (c.T != "if" && c.T != "while") return false; list = c.Body; }
-            idx = int.Parse(tk[k]) - 1;
-            if (idx < 0) return false;
-            if (k < tk.Length - 1)
+
+            if (!listIsReady)
             {
-                if (idx >= list.Count) return false;
-                c = list[idx]; entered = false; depth++;
+                // Az előző blokk törzsébe lépünk
+                if (!parentCommand.IsControlBlock)
+                {
+                    return false;
+                }
+                containingList = parentCommand.Body;
+            }
+
+            index = int.Parse(pathParts[k]) - 1;
+            if (index < 0)
+            {
+                return false;
+            }
+
+            if (!isLastPart)
+            {
+                if (index >= containingList.Count)
+                {
+                    return false;
+                }
+                parentCommand = containingList[index];
+                listIsReady = false;
+                depth++;
             }
         }
-        return idx <= list.Count;
+
+        return index <= containingList.Count;
     }
 
-    static bool Edit(string cmd, string rest)
+    // Kiírja a hibát és hamisat ad, ha a listában nincs ilyen indexű blokk.
+    static bool BlockExists(List<Command> list, int index)
     {
-        var pm = Regex.Match(rest, @"^(\d+(?:\.(?:\d+|e))*)(?:\s+(.*))?$");
-        if (cmd == "add") { return Insert(prog, prog.Count, 0, rest); }
-        if (!pm.Success) { Console.WriteLine("Hibás cím. Nézd meg a 'blocks' nézet címkéit."); return false; }
-        string path = pm.Groups[1].Value, blk = pm.Groups[2].Value;
-        if (cmd == "into")
+        if (index >= list.Count)
         {
-            bool isElse = path.EndsWith(".e");
-            string p = isElse ? path.Substring(0, path.Length - 2) : path;
-            if (!Locate(p, out var l, out var ix, out var dp) || ix >= l.Count) { Console.WriteLine("Nincs ilyen blokk."); return false; }
-            var c = l[ix];
-            if (c.T != "if" && c.T != "while") { Console.WriteLine("Csak vezérlőblokk törzsébe lehet beszúrni."); return false; }
-            if (isElse && c.Else == null) { Console.WriteLine("Ennek az if-nek nincs else ága."); return false; }
-            var tgt = isElse ? c.Else : c.Body;
-            return Insert(tgt, tgt.Count, dp + 1, blk);
+            Console.WriteLine("Nincs ilyen blokk.");
+            return false;
         }
-        if (!Locate(path, out var list, out var idx, out var depth)) { Console.WriteLine("Nincs ilyen pozíció."); return false; }
-        switch (cmd)
+        return true;
+    }
+
+    // Szerkesztőparancs végrehajtása (add / ins / after / into / edit / del).
+    // Igaz, ha a program megváltozott.
+    static bool EditProgram(string command, string argument)
+    {
+        if (command == "add")
         {
-            case "ins": return Insert(list, idx, depth, blk);
+            return InsertBlock(program, program.Count, 0, argument);
+        }
+
+        // A többi parancs "<cím> [blokk]" alakú argumentumot vár.
+        Match addressMatch = Regex.Match(argument, @"^(\d+(?:\.(?:\d+|e))*)(?:\s+(.*))?$");
+        if (!addressMatch.Success)
+        {
+            Console.WriteLine("Hibás cím. Nézd meg a 'blocks' nézet címkéit.");
+            return false;
+        }
+        string path = addressMatch.Groups[1].Value;
+        string blockText = addressMatch.Groups[2].Value;
+
+        if (command == "into")
+        {
+            return InsertIntoControlBlock(path, blockText);
+        }
+
+        List<Command> containingList;
+        int index;
+        int depth;
+        if (!TryLocate(path, out containingList, out index, out depth))
+        {
+            Console.WriteLine("Nincs ilyen pozíció.");
+            return false;
+        }
+
+        switch (command)
+        {
+            case "ins":
+                return InsertBlock(containingList, index, depth, blockText);
+
             case "after":
-                if (idx >= list.Count) { Console.WriteLine("Nincs ilyen blokk."); return false; }
-                return Insert(list, idx + 1, depth, blk);
-            case "del":
-                if (idx >= list.Count) { Console.WriteLine("Nincs ilyen blokk."); return false; }
-                list.RemoveAt(idx); return true;
-            case "edit":
+                if (!BlockExists(containingList, index))
                 {
-                    if (idx >= list.Count) { Console.WriteLine("Nincs ilyen blokk."); return false; }
-                    var t = Tok(blk); var err = L.Validate(t);
-                    if (err != null) { Console.WriteLine(err); return false; }
-                    var nc = L.From(t); var old = list[idx];
-                    if (nc.T != old.T) { Console.WriteLine("Az edit csak azonos típusú blokkra működik (töröld és szúrd be újra)."); return false; }
-                    old.A = nc.A; return true;
+                    return false;
                 }
+                return InsertBlock(containingList, index + 1, depth, blockText);
+
+            case "del":
+                if (!BlockExists(containingList, index))
+                {
+                    return false;
+                }
+                containingList.RemoveAt(index);
+                return true;
+
+            case "edit":
+                if (!BlockExists(containingList, index))
+                {
+                    return false;
+                }
+                return ReplaceBlockFields(containingList[index], blockText);
         }
+
         return false;
     }
 
-    static string[] Tok(string s) => (s ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-    // depth = a beszúrási hely körüli vezérlőblokkok száma; vezérlőblokk csak ha depth <= 2 (max. 3 szint)
-    static bool Insert(List<Cmd> list, int idx, int depth, string blk)
+    // "into <cím> <blokk>": beszúrás egy vezérlőblokk törzsének (vagy else ágának) végére.
+    static bool InsertIntoControlBlock(string path, string blockText)
     {
-        var t = Tok(blk); var err = L.Validate(t);
-        if (err != null) { Console.WriteLine(err); return false; }
-        var c = L.From(t);
-        if ((c.T == "if" || c.T == "while") && depth >= 3) { Console.WriteLine("Legfeljebb 3 szint mélyen ágyazhatók egymásba a vezérlőblokkok."); return false; }
-        list.Insert(idx, c); return true;
+        bool intoElseBranch = path.EndsWith(".e");
+
+        string controlBlockPath;
+        if (intoElseBranch)
+        {
+            controlBlockPath = path.Substring(0, path.Length - 2);
+        }
+        else
+        {
+            controlBlockPath = path;
+        }
+
+        List<Command> containingList;
+        int index;
+        int depth;
+        if (!TryLocate(controlBlockPath, out containingList, out index, out depth) || index >= containingList.Count)
+        {
+            Console.WriteLine("Nincs ilyen blokk.");
+            return false;
+        }
+
+        Command controlBlock = containingList[index];
+        if (!controlBlock.IsControlBlock)
+        {
+            Console.WriteLine("Csak vezérlőblokk törzsébe lehet beszúrni.");
+            return false;
+        }
+        if (intoElseBranch && controlBlock.ElseBody == null)
+        {
+            Console.WriteLine("Ennek az if-nek nincs else ága.");
+            return false;
+        }
+
+        List<Command> targetBody;
+        if (intoElseBranch)
+        {
+            targetBody = controlBlock.ElseBody;
+        }
+        else
+        {
+            targetBody = controlBlock.Body;
+        }
+
+        // A törzs eggyel mélyebben van, mint a vezérlőblokk maga.
+        return InsertBlock(targetBody, targetBody.Count, depth + 1, blockText);
     }
 
-    // ---------- fő ciklus ----------
-    static void Repl()
+    // "edit <cím> <blokk>": a meglévő blokk mezőit írja át (a típus nem változhat).
+    static bool ReplaceBlockFields(Command existingBlock, string blockText)
+    {
+        string[] tokens = Tokenize(blockText);
+        string validationError = Language.Validate(tokens);
+        if (validationError != null)
+        {
+            Console.WriteLine(validationError);
+            return false;
+        }
+
+        Command newBlock = Language.CreateCommand(tokens);
+        if (newBlock.Type != existingBlock.Type)
+        {
+            Console.WriteLine("Az edit csak azonos típusú blokkra működik (töröld és szúrd be újra).");
+            return false;
+        }
+
+        existingBlock.Arguments = newBlock.Arguments;
+        return true;
+    }
+
+    static string[] Tokenize(string text)
+    {
+        if (text == null)
+        {
+            text = "";
+        }
+        return text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    // Új blokk beszúrása a listába az adott indexre.
+    // depth = a beszúrási hely körüli vezérlőblokkok száma; új vezérlőblokk csak akkor szúrható be,
+    // ha depth <= 2 (legfeljebb 3 szint mélyen ágyazhatók egymásba).
+    static bool InsertBlock(List<Command> list, int index, int depth, string blockText)
+    {
+        string[] tokens = Tokenize(blockText);
+        string validationError = Language.Validate(tokens);
+        if (validationError != null)
+        {
+            Console.WriteLine(validationError);
+            return false;
+        }
+
+        Command newBlock = Language.CreateCommand(tokens);
+        if (newBlock.IsControlBlock && depth >= 3)
+        {
+            Console.WriteLine("Legfeljebb 3 szint mélyen ágyazhatók egymásba a vezérlőblokkok.");
+            return false;
+        }
+
+        list.Insert(index, newBlock);
+        return true;
+    }
+
+    // ---------- Fő ciklus (parancsok beolvasása) ----------
+
+    static void RunInteractiveLoop()
     {
         Console.WriteLine("MineScript IDE – 'help' a parancsokért.");
-        Redraw("Alaphelyzet."); ShowText();
+        Redraw("Alaphelyzet.");
+        ShowText();
+
         while (true)
         {
             Console.Write("\n> ");
-            var ln = Console.ReadLine(); if (ln == null) return;
-            var p = ln.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-            if (p.Length == 0) continue;
-            string cmd = p[0].ToLower(), rest = p.Length > 1 ? p[1] : "";
+            string inputLine = Console.ReadLine();
+            if (inputLine == null)
+            {
+                return;
+            }
+
+            // Az első szó a parancs, a többi az argumentum.
+            string[] inputParts = inputLine.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            if (inputParts.Length == 0)
+            {
+                continue;
+            }
+
+            string command = inputParts[0].ToLower();
+            string argument;
+            if (inputParts.Length > 1)
+            {
+                argument = inputParts[1];
+            }
+            else
+            {
+                argument = "";
+            }
+
             try
             {
-                switch (cmd)
+                bool shouldExit = HandleCommand(command, argument);
+                if (shouldExit)
                 {
-                    case "help": Help(); break;
-                    case "exit": return;
-                    case "text": ShowText(); break;
-                    case "blocks": ShowBlocks(); break;
-                    case "map": Show(en != null ? "Nyomkövetés folyamatban." : "Kész / alaphelyzet."); break;
-                    case "log": Console.WriteLine(File.Exists(outPath) ? File.ReadAllText(outPath) : "(még nincs napló)"); break;
-                    case "speed": delay = Math.Max(0, int.Parse(rest)); Console.WriteLine("Késleltetés: " + delay + " ms"); break;
-                    case "save":
-                        File.WriteAllLines(inPath, new[] { I.R + " " + I.C }.Concat(mapLines).Concat(L.Text(prog)));
-                        Console.WriteLine("Mentve: " + inPath); break;
-                    case "add":
-                    case "ins":
-                    case "after":
-                    case "into":
-                    case "edit":
-                    case "del":
-                        if (Edit(cmd, rest)) { en = null; I.Reset(); L.Num(prog); WriteLog(); ShowBlocks(); Console.WriteLine(); ShowText(); }
-                        break;
-                    case "run": RunSlow(); break;
-                    case "debug": Start(); Adv(); Show("Nyomkövetés: a következő sor a ⇒ jelölt."); ShowText(); break;
-                    case "n":
-                        {
-                            if (en == null) { Console.WriteLine("Nincs aktív nyomkövetés (debug)."); break; }
-                            int cnt = rest == "" ? 1 : int.Parse(rest);
-                            for (int k = 0; k < cnt && Adv(); k++) { }
-                            Show(en != null ? "Nyomkövetés: a következő sor a ⇒ jelölt." : "A program véget ért."); ShowText(); break;
-                        }
-                    case "stop": en = null; Console.WriteLine("Futás megszakítva (a robot állapota megmaradt)."); break;
-                    case "f":
-                    case "l":
-                    case "m":
-                        {
-                            if (en != null) { en = null; Console.WriteLine("A programfutás megszakadt, kézi vezérlés."); }
-                            string msg = I.Manual(cmd, rest == "" ? 1 : int.Parse(rest));
-                            Show("Kézi vezérlés: " + msg); break;
-                        }
-                    default: Console.WriteLine("Ismeretlen parancs. 'help'"); break;
+                    return;
                 }
             }
-            catch (Exception ex) when (ex is FormatException || ex is OverflowException) { Console.WriteLine("Hibás szám."); }
+            catch (Exception exception) when (exception is FormatException || exception is OverflowException)
+            {
+                Console.WriteLine("Hibás szám.");
+            }
         }
+    }
+
+    // Egy parancs feldolgozása. Igazat ad, ha ki kell lépni a programból.
+    static bool HandleCommand(string command, string argument)
+    {
+        switch (command)
+        {
+            case "help":
+                ShowHelp();
+                break;
+
+            case "exit":
+                return true;
+
+            case "text":
+                ShowText();
+                break;
+
+            case "blocks":
+                ShowBlocks();
+                break;
+
+            case "map":
+                HandleMap();
+                break;
+
+            case "log":
+                HandleLog();
+                break;
+
+            case "speed":
+                stepDelayMilliseconds = Math.Max(0, int.Parse(argument));
+                Console.WriteLine("Késleltetés: " + stepDelayMilliseconds + " ms");
+                break;
+
+            case "save":
+                HandleSave();
+                break;
+
+            case "add":
+            case "ins":
+            case "after":
+            case "into":
+            case "edit":
+            case "del":
+                HandleEditCommand(command, argument);
+                break;
+
+            case "run":
+                RunSlowly();
+                break;
+
+            case "debug":
+                StartRun();
+                AdvanceRun();
+                Show("Nyomkövetés: a következő sor a ⇒ jelölt.");
+                ShowText();
+                break;
+
+            case "n":
+                HandleNextStep(argument);
+                break;
+
+            case "stop":
+                activeRun = null;
+                Console.WriteLine("Futás megszakítva (a robot állapota megmaradt).");
+                break;
+
+            case "f":
+            case "l":
+            case "m":
+                HandleManualControl(command, argument);
+                break;
+
+            default:
+                Console.WriteLine("Ismeretlen parancs. 'help'");
+                break;
+        }
+
+        return false;
+    }
+
+    static void HandleMap()
+    {
+        if (activeRun != null)
+        {
+            Show("Nyomkövetés folyamatban.");
+        }
+        else
+        {
+            Show("Kész / alaphelyzet.");
+        }
+    }
+
+    static void HandleLog()
+    {
+        if (File.Exists(outputPath))
+        {
+            Console.WriteLine(File.ReadAllText(outputPath));
+        }
+        else
+        {
+            Console.WriteLine("(még nincs napló)");
+        }
+    }
+
+    // A program mentése az input fájlba: méret, térkép, majd a program szöveges alakja.
+    static void HandleSave()
+    {
+        string sizeLine = interpreter.Rows + " " + interpreter.Columns;
+        IEnumerable<string> fileContent = new[] { sizeLine }
+            .Concat(mapLines)
+            .Concat(Language.RenderSourceCode(program));
+
+        File.WriteAllLines(inputPath, fileContent);
+        Console.WriteLine("Mentve: " + inputPath);
+    }
+
+    // Szerkesztés után a futás elölről indul: alaphelyzet, új sorszámok, friss napló és nézetek.
+    static void HandleEditCommand(string command, string argument)
+    {
+        bool programChanged = EditProgram(command, argument);
+        if (!programChanged)
+        {
+            return;
+        }
+
+        activeRun = null;
+        interpreter.Reset();
+        Language.AssignLineNumbers(program);
+        WriteLog();
+
+        ShowBlocks();
+        Console.WriteLine();
+        ShowText();
+    }
+
+    // "n [db]": a nyomkövetésben a megadott számú (alapból 1) lépést előre megy.
+    static void HandleNextStep(string argument)
+    {
+        if (activeRun == null)
+        {
+            Console.WriteLine("Nincs aktív nyomkövetés (debug).");
+            return;
+        }
+
+        int stepCount;
+        if (argument == "")
+        {
+            stepCount = 1;
+        }
+        else
+        {
+            stepCount = int.Parse(argument);
+        }
+
+        for (int i = 0; i < stepCount; i++)
+        {
+            if (!AdvanceRun())
+            {
+                break;
+            }
+        }
+
+        if (activeRun != null)
+        {
+            Show("Nyomkövetés: a következő sor a ⇒ jelölt.");
+        }
+        else
+        {
+            Show("A program véget ért.");
+        }
+        ShowText();
+    }
+
+    // "f [n]" / "l [n]" / "m": kézi vezérlés; a futó programot megszakítja.
+    static void HandleManualControl(string command, string argument)
+    {
+        if (activeRun != null)
+        {
+            activeRun = null;
+            Console.WriteLine("A programfutás megszakadt, kézi vezérlés.");
+        }
+
+        int amount;
+        if (argument == "")
+        {
+            amount = 1;
+        }
+        else
+        {
+            amount = int.Parse(argument);
+        }
+
+        string message = interpreter.ManualControl(command, amount);
+        Show("Kézi vezérlés: " + message);
     }
 }
