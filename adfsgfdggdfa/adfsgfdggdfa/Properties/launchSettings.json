@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "adfsgfdggdfa": {
+      "commandName": "Project",
+      "commandLineArgs": "input.txt output.txt"
+    }
+  }
+}
