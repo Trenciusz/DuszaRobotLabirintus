@@ -2,7 +2,7 @@
   "profiles": {
     "adfsgfdggdfa": {
       "commandName": "Project",
-      "commandLineArgs": "input.txt output.txt"
+      "commandLineArgs": "input_video.txt output.txt"
     }
   }
 }

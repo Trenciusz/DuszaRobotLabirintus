@@ -331,6 +331,8 @@ NÉZETEK
   after <cím> <blokk>    Beszúrás a címen lévő blokk MÖGÉ
   into <cím> <blokk>     Beszúrás egy vezérlőblokk törzsének végére
                           (else ág: into 2.e ...)
+  after <cím> else       Else ág hozzáadása a címen lévő if blokkhoz
+                          (utána: into <cím>.e <blokk>)
   edit <cím> <blokk>     Blokk mezőinek átírása (azonos típusra)
   del <cím>              Blokk törlése (a tartalmával együtt)
   save                   Program mentése az input fájlba
@@ -504,6 +506,10 @@ NÉZETEK
                 {
                     return false;
                 }
+                if (blockText.Trim() == "else")
+                {
+                    return AddElseBranch(containingList[index]);
+                }
                 return InsertBlock(containingList, index + 1, depth, blockText);
 
             case "del":
@@ -561,6 +567,11 @@ NÉZETEK
             return false;
         }
 
+        if (blockText.Trim() == "else")
+        {
+            return AddElseBranch(controlBlock);
+        }
+
         List<Command> targetBody;
         if (intoElseBranch)
         {
@@ -597,6 +608,26 @@ NÉZETEK
         return true;
     }
 
+    // "after <cím> else" / "into <cím> else": a címen lévő else nélküli if blokkot if-else blokká alakítja
+    // (üres else ággal). Az else ág tartalmát utána az "into <cím>.e <blokk>" paranccsal lehet felépíteni.
+    static bool AddElseBranch(Command targetBlock)
+    {
+        if (targetBlock.Type != CommandType.If)
+        {
+            Say("Else ágat csak if blokkhoz lehet adni. Az if blokk címét add meg, pl.: after 3.2 else");
+            return false;
+        }
+
+        if (targetBlock.ElseBody != null)
+        {
+            Say("Ennek az if-nek már van else ága.");
+            return false;
+        }
+
+        targetBlock.ElseBody = new List<Command>();
+        return true;
+    }
+
     static string[] Tokenize(string text)
     {
         if (text == null)
@@ -611,6 +642,12 @@ NÉZETEK
     // ha depth <= 2 (legfeljebb 3 szint mélyen ágyazhatók egymásba).
     static bool InsertBlock(List<Command> list, int index, int depth, string blockText)
     {
+        if (blockText.Trim() == "else")
+        {
+            Say("Az else-t az if blokk címével add meg, pl.: after 3.2 else");
+            return false;
+        }
+
         string[] tokens = Tokenize(blockText);
         string validationError = Language.Validate(tokens);
         if (validationError != null)

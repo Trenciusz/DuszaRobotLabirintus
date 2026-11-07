@@ -1,8 +1,1 @@
-1 isThere 2 false
-2
-3 turn by 0
-4 print false
-5
-7
-8 isThere 3 E_BAD_ARG
-EOR
+Az output üres.
