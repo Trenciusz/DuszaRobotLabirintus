@@ -1,0 +1,46 @@
+3 7
+#.@..@#
+.>@#...
+#.@.@.#
+set a to 7
+set b to 3
+set s to a + b
+set d to a - b
+set m to a * b
+print s
+print d
+print m
+set lt to a < b
+set le to a <= 7
+set gt to a > b
+set ge to b >= a
+set eq to a = 7
+set ne to a <> b
+set beq to lt = ge
+set bne to gt <> le
+set both to gt and le
+set either to lt or ge
+set neg to not either
+print neg
+set got to 0
+set i to 0
+set more to i < 4
+while more
+  set f to isThere 2
+  if f
+    step forward 1
+    mine here
+    set got to got + 1
+    set big to got > 1
+    if big
+      print got
+  else
+    turn by 1
+  set i to i + 1
+  set more to i < 4
+print got
+turn by 2
+set e to isThere 0
+print e
+set e2 to isThere 2
+print e2

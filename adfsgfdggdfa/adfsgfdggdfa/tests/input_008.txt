@@ -1,0 +1,13 @@
+2 12
+...@..>...@.
+.##........#
+set x to 1
+set flag to false
+set y to x
+set x to x + 1
+if flag
+  set x to true
+else
+  set flag to x = 2
+set flag to true
+set x to flag

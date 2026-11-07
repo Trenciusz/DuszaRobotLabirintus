@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Mechwart\\Verseny\\DuszaCurrentRobot\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj": {}
+    "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj": {}
   },
   "projects": {
-    "D:\\Mechwart\\Verseny\\DuszaCurrentRobot\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj": {
+    "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Mechwart\\Verseny\\DuszaCurrentRobot\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj",
+        "projectUniqueName": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj",
         "projectName": "robot",
-        "projectPath": "D:\\Mechwart\\Verseny\\DuszaCurrentRobot\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj",
+        "projectPath": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj",
         "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
-        "outputPath": "D:\\Mechwart\\Verseny\\DuszaCurrentRobot\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\obj\\",
+        "outputPath": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -26,6 +26,7 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -68,7 +69,7 @@
               "privateAssets": "none"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.311/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

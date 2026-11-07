@@ -3,4 +3,11 @@
 .#############.
 .......@...>...
 set arany to isThere 2
+set count to 0
+turn by 0
 print arany
+if false
+  print 1
+else
+  set x to isThere 3
+print 9

@@ -1,0 +1,109 @@
+1
+2
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 true
+5
+6 step forward 1
+7 mine here
+8
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 true
+5
+6 step forward 1
+7 mine here
+8
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 false
+12
+3
+4 isThere 2 false
+5
+9
+10 step forward 1
+11 isThere 1 true
+12
+3
+13 print 2
+14 turn by 3
+15 step forward 2
+16 turn by 3
+17 step forward 20 E_BEDROCK_HIT
+EOR

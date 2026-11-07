@@ -1,0 +1,16 @@
+1 isThere 0 false
+2 print false
+3 isThere 1 true
+4 print true
+5 isThere 2 false
+6 print false
+7 step forward 0
+8 turn by 0
+9 turn by 7
+10 isThere 1 true
+11
+12
+13 print 10000
+14
+15 step forward -1 E_BAD_ARG
+EOR

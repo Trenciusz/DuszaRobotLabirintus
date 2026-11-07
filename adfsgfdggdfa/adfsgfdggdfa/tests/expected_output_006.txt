@@ -1,0 +1,17 @@
+1
+2
+3
+4 turn by 1
+5
+6
+3
+4 turn by 1
+5
+6
+3
+4 turn by 1
+5
+6
+3
+7 E_NON_BOOL_CONDITION
+EOR

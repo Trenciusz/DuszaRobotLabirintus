@@ -1,0 +1,6 @@
+1
+2 step forward 1
+3 mine here
+4 print 1
+5 isThere E_UNINITIALIZED
+EOR

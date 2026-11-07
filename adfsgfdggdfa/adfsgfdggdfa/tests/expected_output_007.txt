@@ -1,0 +1,7 @@
+1
+2
+3
+4
+5 print true
+6 E_BAD_OPERAND
+EOR

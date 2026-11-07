@@ -1,0 +1,66 @@
+1
+2
+3
+4
+5
+6 print 10
+7 print 4
+8 print 21
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20 print true
+21
+22
+23
+24
+25 isThere 2 true
+26
+27 step forward 1
+28 mine here
+29
+30
+31
+35
+36
+24
+25 isThere 2 false
+26
+33
+34 turn by 1
+35
+36
+24
+25 isThere 2 true
+26
+27 step forward 1
+28 mine here
+29
+30
+31
+32 print 2
+35
+36
+24
+25 isThere 2 false
+26
+33
+34 turn by 1
+35
+36
+24
+37 print 2
+38 turn by 2
+39 isThere 0 true
+40 print true
+41 isThere 2 false
+42 print false
+EOR
