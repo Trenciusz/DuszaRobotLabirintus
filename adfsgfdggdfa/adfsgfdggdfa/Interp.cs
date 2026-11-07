@@ -188,7 +188,7 @@ class Interpreter
         throw new InterpreterException("E_UNINITIALIZED");
     }
 
-    // A "set" jobb oldalának kiértékelése. Az eredmény int vagy bool.
+    // Egy kifejezés kiértékelése (a "set" jobb oldala, illetve az if / while feltétele). Az eredmény int vagy bool.
     object EvaluateExpression(string[] expression)
     {
         if (expression.Length == 1)
@@ -470,10 +470,11 @@ class Interpreter
         Variables[variableName] = newValue;
     }
 
-    // if / while feltétele: bool értéknek kell lennie.
+    // if / while feltétele: tetszőleges kifejezés (érték, isThere x, not x, x művelet y),
+    // de az eredménye bool értéknek kell lennie.
     bool EvaluateCondition(Command command)
     {
-        object value = ReadValue(command.Arguments[0]);
+        object value = EvaluateExpression(command.Arguments);
         if (!(value is bool))
         {
             throw new InterpreterException("E_NON_BOOL_CONDITION");

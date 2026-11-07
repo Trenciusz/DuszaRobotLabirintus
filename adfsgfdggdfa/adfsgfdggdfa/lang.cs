@@ -56,11 +56,11 @@ class Command
                 }
 
             case CommandType.If:
-                return "if " + Arguments[0];
+                return "if " + string.Join(" ", Arguments);
 
             case CommandType.While:
             default:
-                return "while " + Arguments[0];
+                return "while " + string.Join(" ", Arguments);
         }
     }
 
@@ -82,26 +82,11 @@ class Command
                 return "print [" + Arguments[0] + "]";
 
             case CommandType.Set:
-                {
-                    // A műveleti jelek (és az isThere / not) nem szerkeszthetők, ezért nem kapnak zárójelet.
-                    var expressionParts = new List<string>();
-                    foreach (string token in Arguments.Skip(1))
-                    {
-                        if (Language.Operators.Contains(token))
-                        {
-                            expressionParts.Add(token);
-                        }
-                        else
-                        {
-                            expressionParts.Add("[" + token + "]");
-                        }
-                    }
-                    return "set [" + Arguments[0] + "] to " + string.Join(" ", expressionParts);
-                }
+                return "set [" + Arguments[0] + "] to " + ExpressionToBlockViewText(Arguments.Skip(1));
 
             case CommandType.If:
                 {
-                    string text = "if [" + Arguments[0] + "]";
+                    string text = "if " + ExpressionToBlockViewText(Arguments);
                     if (ElseBody != null)
                     {
                         text += "  (if-else)";
@@ -111,8 +96,27 @@ class Command
 
             case CommandType.While:
             default:
-                return "while [" + Arguments[0] + "]";
+                return "while " + ExpressionToBlockViewText(Arguments);
         }
+    }
+
+    // Egy kifejezés a blokk-nézetben: az operandusok [szögletes zárójelben] vannak,
+    // a műveleti jelek (és az isThere / not) nem szerkeszthetők, ezért nem kapnak zárójelet.
+    static string ExpressionToBlockViewText(IEnumerable<string> expressionTokens)
+    {
+        var expressionParts = new List<string>();
+        foreach (string token in expressionTokens)
+        {
+            if (Language.Operators.Contains(token))
+            {
+                expressionParts.Add(token);
+            }
+            else
+            {
+                expressionParts.Add("[" + token + "]");
+            }
+        }
+        return string.Join(" ", expressionParts);
     }
 }
 
@@ -168,9 +172,9 @@ static class Language
         return IsIdentifier(text);
     }
 
-    // A "set <változó> to ..." jobb oldala érvényes-e:
+    // Egy kifejezés (a "set" jobb oldala, illetve az if / ifelse / while feltétele) érvényes-e:
     //   <érték>  |  isThere <érték>  |  not <érték>  |  <érték> <művelet> <érték>
-    static bool IsValidSetExpression(string[] expression)
+    static bool IsValidExpression(string[] expression)
     {
         if (expression.Length == 1)
         {
@@ -230,8 +234,8 @@ static class Language
             case CommandType.If:
             case IfElseKeyword:
             case CommandType.While:
-                usage = tokens[0] + " <érték>";
-                isValid = tokens.Length == 2 && IsSimpleValue(tokens[1]);
+                usage = tokens[0] + " <érték | isThere x | not x | x művelet y>";
+                isValid = IsValidExpression(tokens.Skip(1).ToArray());
                 break;
 
             case CommandType.Set:
@@ -245,7 +249,7 @@ static class Language
                 {
                     return "Érvénytelen változónév (kulcsszó vagy hibás azonosító): " + tokens[1];
                 }
-                isValid = IsValidSetExpression(tokens.Skip(3).ToArray());
+                isValid = IsValidExpression(tokens.Skip(3).ToArray());
                 break;
 
             default:
@@ -278,16 +282,21 @@ static class Language
                 break;
 
             case CommandType.Print:
-            case CommandType.If:
-            case CommandType.While:
                 command.Type = tokens[0];
                 command.Arguments = new[] { tokens[1] };
+                break;
+
+            case CommandType.If:
+            case CommandType.While:
+                // "if / while <kifejezés>": a feltétel tokenjei (1 vagy több)
+                command.Type = tokens[0];
+                command.Arguments = tokens.Skip(1).ToArray();
                 break;
 
             case IfElseKeyword:
                 // Ez is "if" típusú, de üres else ággal.
                 command.Type = CommandType.If;
-                command.Arguments = new[] { tokens[1] };
+                command.Arguments = tokens.Skip(1).ToArray();
                 command.ElseBody = new List<Command>();
                 break;
 
