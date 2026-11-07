@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Windows;
 
 class Program
 {
@@ -97,7 +98,14 @@ class Program
 
     static void WriteLog()
     {
-        File.WriteAllLines(outputPath, interpreter.Log);
+        if (interpreter.Log.Count == 0)
+        {
+            File.WriteAllText(outputPath, "Az output üres.");
+        }
+        else
+        {
+            File.WriteAllLines(outputPath, interpreter.Log);
+        }
     }
 
     // ---------- Futtatás ----------
@@ -302,26 +310,79 @@ class Program
         }
     }
 
+
     static void ShowHelp()
     {
-        Say(@"PARANCSOK
- Nézetek:    text | blocks | log   (a program szöveges és blokk nézete mindig látszik középen)
- Szerkesztés (blokk-alapú, mindig érvényes szerkezet; a pozíciók a 'blocks' nézet címkéi, pl. 3, 3.2, 3.e.1):
-   add <blokk>              új blokk a program végére
-   ins <cím> <blokk>        beszúrás a címen lévő blokk ELÉ     (pl. ins 1 set x to 0)
-   after <cím> <blokk>      beszúrás a címen lévő blokk MÖGÉ
-   into <cím> <blokk>       beszúrás egy vezérlőblokk törzsének végére (else ág: into 2.e ...)
-   edit <cím> <blokk>       blokk mezőinek átírása (azonos típusra)
-   del <cím>                blokk törlése (a tartalmával együtt)
-   save                     program mentése az input fájlba
-   Blokkok: step forward X | turn by X | mine here | print X | set V to <X | isThere X | not X | X op Y>
-            if X | ifelse X | while X      (X: változó, szám 0..100, true/false; op: + - * = <> < <= > >= and or)
- Futtatás:   run (lassított) | debug (nyomkövetés) | n [db] (következő lépés) | stop | speed <ms>
- Kézi vezérlés (megszakítja a futást, nincs naplózás): f [n] (előre) | l [n] (balra fordul) | m (bányász)
- Egyéb:      help | exit
- Gombok:     help = help | Run = run | Debug = debug | Next = n | Stop = stop");
-    }
+        MessageBox.Show(
+           @"========== PARANCSOK ==========
 
+NÉZETEK
+  text | blocks | log
+  A program szöveges és blokk nézete mindig látszik középen.
+
+========== SZERKESZTÉS ==========
+
+  A szerkesztés blokk-alapú, mindig érvényes szerkezetet tart fenn.
+  A pozíciók a 'blocks' nézet címkéi (pl. 3, 3.2, 3.e.1).
+
+  add <blokk>             Új blokk a program végére
+  ins <cím> <blokk>       Beszúrás a címen lévő blokk ELÉ
+                          (pl. ins 1 set x to 0)
+  after <cím> <blokk>    Beszúrás a címen lévő blokk MÖGÉ
+  into <cím> <blokk>     Beszúrás egy vezérlőblokk törzsének végére
+                          (else ág: into 2.e ...)
+  edit <cím> <blokk>     Blokk mezőinek átírása (azonos típusra)
+  del <cím>              Blokk törlése (a tartalmával együtt)
+  save                   Program mentése az input fájlba
+
+========== BLOKKOK ==========
+
+  step forward X
+  turn by X
+  mine here
+  print X
+  set V to X
+  isThere X
+  not X
+  X op Y
+
+  if X | ifelse X | while X
+
+  X: változó, 0..100 közötti szám vagy true/false
+  op: + - * = <> < <= > >= and or
+
+========== FUTTATÁS ==========
+
+  run                    Lassított futtatás
+  debug                  Nyomkövetés
+  n [db]                 Következő lépés
+  stop                   Futtatás leállítása
+  speed <ms>             Futtatási sebesség beállítása
+
+========== KÉZI VEZÉRLÉS ==========
+
+  f [n]                  Előre lépés
+  l [n]                  Balra fordulás
+  m                      Bányászat
+
+  A kézi vezérlés megszakítja a futást, nincs naplózás.
+
+========== EGYÉB ==========
+
+  help                   Súgó megjelenítése
+  exit                   Kilépés
+
+========== GOMBOK ==========
+
+  help  = help
+  Run   = run
+  Debug = debug
+  Next  = n
+  Stop  = stop", "",
+           MessageBoxButton.OK,
+           MessageBoxImage.Information
+       );
+    }
     // ---------- Szerkesztés ----------
 
     // Megkeresi a címnek (pl. "3.2.e.1") megfelelő pozíciót a programban.

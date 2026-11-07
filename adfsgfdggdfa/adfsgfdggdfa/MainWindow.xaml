@@ -61,7 +61,7 @@
                     <TextBlock Grid.Row="0" Text="Command bar" HorizontalAlignment="Center" FontSize="18"/>
 
                     <WrapPanel Grid.Row="1" Margin="0,6,0,0">
-                        <Button Content="help" Width="58" Margin="0,0,6,6" Click="HelpButton_Click"/>
+                        <Button Content="Help" Width="58" Margin="0,0,6,6" Click="HelpButton_Click"/>
                         <Button Content="Run" Width="58" Margin="0,0,6,6" Click="RunButton_Click"/>
                         <Button Content="Debug" Width="58" Margin="0,0,6,6" Click="DebugButton_Click"/>
                         <Button Content="Next" Width="58" Margin="0,0,6,6" Click="NextButton_Click"/>
