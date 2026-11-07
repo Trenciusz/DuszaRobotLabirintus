@@ -1,0 +1,13 @@
+4 9
+.........
+.#.###.#.
+.<......@
+.........
+set k to 3
+set go to true
+while go
+  turn by 1
+  set k to k - 1
+  set go to k > 0
+if k
+  print 1

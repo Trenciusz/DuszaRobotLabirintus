@@ -3,6 +3,10 @@
   "WorkspaceRootPath": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{1357DA41-FA44-4435-B63A-ADA07F1A8B74}|adfsgfdggdfa\\adfsgfdggdfa.csproj|c:\\users\\user\\documents\\github\\duszarobotlabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{1357DA41-FA44-4435-B63A-ADA07F1A8B74}|adfsgfdggdfa\\adfsgfdggdfa.csproj|solutionrelative:adfsgfdggdfa\\adfsgfdggdfa.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{1357DA41-FA44-4435-B63A-ADA07F1A8B74}|adfsgfdggdfa\\adfsgfdggdfa.csproj|c:\\users\\user\\documents\\github\\duszarobotlabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{1357DA41-FA44-4435-B63A-ADA07F1A8B74}|adfsgfdggdfa\\adfsgfdggdfa.csproj|solutionrelative:adfsgfdggdfa\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -27,19 +31,31 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "adfsgfdggdfa",
+              "DocumentMoniker": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj",
+              "RelativeDocumentMoniker": "adfsgfdggdfa\\adfsgfdggdfa.csproj",
+              "ToolTip": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\adfsgfdggdfa.csproj",
+              "RelativeToolTip": "adfsgfdggdfa\\adfsgfdggdfa.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-11-07T00:19:05.561Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\Program.cs",
               "RelativeDocumentMoniker": "adfsgfdggdfa\\Program.cs",
               "ToolTip": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\Program.cs",
               "RelativeToolTip": "adfsgfdggdfa\\Program.cs",
-              "ViewState": "AgIAANEAAAAAAAAAAAAswCAAAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAANEAAAAAAAAAAAAswNwAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-11-06T20:35:33.395Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "lang.cs",
               "DocumentMoniker": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\lang.cs",
               "RelativeDocumentMoniker": "adfsgfdggdfa\\lang.cs",
@@ -51,7 +67,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "Interp.cs",
               "DocumentMoniker": "C:\\Users\\User\\Documents\\GitHub\\DuszaRobotLabirintus\\adfsgfdggdfa\\adfsgfdggdfa\\Interp.cs",
               "RelativeDocumentMoniker": "adfsgfdggdfa\\Interp.cs",
