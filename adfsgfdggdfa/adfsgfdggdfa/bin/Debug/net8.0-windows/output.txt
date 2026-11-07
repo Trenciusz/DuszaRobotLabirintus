@@ -1,6 +1,2 @@
-1 isThere 2 false
-2 print false
-3
-4 print true
-5 print true
+1 print E_UNINITIALIZED
 EOR

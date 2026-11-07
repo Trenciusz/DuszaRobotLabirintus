@@ -123,12 +123,24 @@ public partial class MainWindow : Window
     // ---------- Frissítés ----------
 
     // Minden megjelenített adat frissítése a program és az interpreter jelenlegi állapotából.
+
+
     void RefreshAll()
     {
+        string frontDescription = Program.DescribeFrontCell();
+        SensorRun.Text = frontDescription;
         Interpreter robot = Program.interpreter;
 
-        SensorRun.Text = Program.DescribeFrontCell();
-        GoldRun.Text = robot.CollectedGold.ToString();
+        if (frontDescription.ToLower().Contains("aranyrög"))
+        {
+            SensorRun.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom("#FFCC00");
+        }
+        else
+        {
+            SensorRun.Foreground = System.Windows.Media.Brushes.Black;
+        }
+
+            GoldRun.Text = robot.CollectedGold.ToString();
         VariablesLabel.Text = "Változók: " + Program.DescribeVariables();
         ConsoleLabel.Text = "Konzol: " + Program.DescribeConsoleOutput();
 
