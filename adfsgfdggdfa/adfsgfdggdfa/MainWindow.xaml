@@ -1,0 +1,106 @@
+<Window x:Class="RumogloBot.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RUMOGLÓBOT" Width="1100" Height="720" MinWidth="800" MinHeight="520" WindowStartupLocation="CenterScreen"
+        Background="#D9D9D9" FontFamily="Segoe UI" FontSize="14"
+        SizeChanged="Window_SizeChanged">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="120"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ================= Fent: cím (bal) és állapotpanel (jobb) ================= -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="RUMOGLÓBOT" FontSize="56" FontWeight="Bold" Foreground="#FFCC00"/>
+                <TextBlock Text="Ki korán kel, aranyat lel." FontSize="18"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                <!-- Szenzor + felvett arany (a Run elemek szándékosan egy sorban vannak, hogy ne kerüljön közéjük szóköz) -->
+                <TextBlock TextWrapping="Wrap"><Run Text="Szenzor: "/><Run x:Name="SensorRun" Text="-"/><Run Text=" | Felvett "/><Run Text="arany" Foreground="#FFCC00"/><Run Text=" száma: "/><Run x:Name="GoldRun" Text="0"/></TextBlock>
+
+                <!-- Változók és konzol: tördelve, és ha sok van, belül görgethető -->
+                <ScrollViewer MaxHeight="70" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="VariablesLabel" Text="Változók: -" TextWrapping="Wrap"/>
+                </ScrollViewer>
+                <ScrollViewer MaxHeight="70" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="ConsoleLabel" Text="Konzol: -" TextWrapping="Wrap"/>
+                </ScrollViewer>
+
+                <TextBlock x:Name="StatusLabel" Text="Állapot: Alaphelyzet." TextWrapping="Wrap"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ================= Középen: Command bar, szöveges és blokk nézet ================= -->
+        <Grid Grid.Row="1" Margin="0,10,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="260"/>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="3*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Command bar: gombok, kimenet, beviteli sor -->
+            <Border Grid.Column="0" Background="White" Padding="6" Margin="0,0,8,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Command bar" HorizontalAlignment="Center" FontSize="18"/>
+
+                    <WrapPanel Grid.Row="1" Margin="0,6,0,0">
+                        <Button Content="help" Width="58" Margin="0,0,6,6" Click="HelpButton_Click"/>
+                        <Button Content="Run" Width="58" Margin="0,0,6,6" Click="RunButton_Click"/>
+                        <Button Content="Debug" Width="58" Margin="0,0,6,6" Click="DebugButton_Click"/>
+                        <Button Content="Next" Width="58" Margin="0,0,6,6" Click="NextButton_Click"/>
+                        <Button Content="Stop" Width="58" Margin="0,0,6,6" Click="StopButton_Click"/>
+                    </WrapPanel>
+
+                    <TextBox Grid.Row="2" x:Name="OutputBox" IsReadOnly="True" TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"/>
+
+                    <DockPanel Grid.Row="3" Margin="0,6,0,0">
+                        <TextBlock DockPanel.Dock="Left" Text="&gt; " VerticalAlignment="Center" FontFamily="Consolas"/>
+                        <TextBox x:Name="InputBox" FontFamily="Consolas" KeyDown="InputBox_KeyDown"/>
+                    </DockPanel>
+                </Grid>
+            </Border>
+
+            <!-- Szöveges forráskód (a => a következő végrehajtandó sort jelöli) -->
+            <Border Grid.Column="1" Background="White" Padding="6" Margin="0,0,8,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Szöveges kód" HorizontalAlignment="Center" FontSize="18"/>
+                    <TextBox x:Name="TextViewBox" IsReadOnly="True" BorderThickness="0" FontFamily="Consolas" FontSize="13"
+                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                </DockPanel>
+            </Border>
+
+            <!-- Blokk nézet (a címkék a szerkesztő pozíciói, pl. 3, 3.2, 3.e.1) -->
+            <Border Grid.Column="2" Background="White" Padding="6">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Blokk nézet (címekkel)" HorizontalAlignment="Center" FontSize="18"/>
+                    <TextBox x:Name="BlockViewBox" IsReadOnly="True" BorderThickness="0" FontFamily="Consolas" FontSize="13"
+                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- ================= Alul: térkép (ha nagy, kicsinyítve fér el) ================= -->
+        <Viewbox x:Name="MapBox" Grid.Row="2" Stretch="Uniform" StretchDirection="DownOnly"
+                 HorizontalAlignment="Center" MaxHeight="300">
+            <UniformGrid x:Name="MapGrid"/>
+        </Viewbox>
+    </Grid>
+</Window>

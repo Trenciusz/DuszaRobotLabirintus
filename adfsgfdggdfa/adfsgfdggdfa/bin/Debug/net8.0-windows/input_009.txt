@@ -1,0 +1,10 @@
+3 3
+...
+.>@
+...
+set a to 1
+step forward a
+mine here
+print a
+set r to isThere w
+print 1

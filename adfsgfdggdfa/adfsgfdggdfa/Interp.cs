@@ -135,6 +135,19 @@ class Interpreter
         return GetCellType(frontRow, frontColumn);
     }
 
+    // A robot előtti cella felfedezetté tétele (ha a térképen belül van).
+    // Falnak ütközéskor hívjuk, hogy a fal is látszódjon a térképen.
+    void ExploreFrontCell()
+    {
+        int frontRow = RobotRow + RowChangePerDirection[Direction];
+        int frontColumn = RobotColumn + ColumnChangePerDirection[Direction];
+        bool isFrontInsideMap = frontRow >= 0 && frontColumn >= 0 && frontRow < Rows && frontColumn < Columns;
+        if (isFrontInsideMap)
+        {
+            Explored[frontRow, frontColumn] = true;
+        }
+    }
+
     // Érték szöveggé alakítása a naplóhoz és a kimenethez (bool: "true"/"false").
     public static string FormatValue(object value)
     {
@@ -395,6 +408,7 @@ class Interpreter
         {
             if (GetFrontCellType() == CellWall)
             {
+                ExploreFrontCell();
                 throw new InterpreterException("E_BEDROCK_HIT");
             }
             RobotRow += RowChangePerDirection[Direction];
@@ -633,6 +647,7 @@ class Interpreter
                 {
                     if (GetFrontCellType() == CellWall)
                     {
+                        ExploreFrontCell();
                         return "Falnak ütköztél, a robot megállt.";
                     }
                     RobotRow += RowChangePerDirection[Direction];

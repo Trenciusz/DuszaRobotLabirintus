@@ -1,0 +1,9 @@
+1 12
+>.@..@.#...@
+set go to true
+set n to 0
+while go
+  set n to n + 1
+  set go to n < 3
+set r to true or c
+print 1

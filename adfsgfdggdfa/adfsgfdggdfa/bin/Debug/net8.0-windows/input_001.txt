@@ -1,0 +1,17 @@
+1 1
+^
+set n to isThere 0
+print n
+set w to isThere 1
+print w
+set g to isThere 2
+print g
+step forward 0
+turn by 0
+turn by 7
+set w to isThere 1
+set a to 100
+set b to a * a
+print b
+set neg to 0 - 1
+step forward neg
