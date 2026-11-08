@@ -437,7 +437,8 @@ static class Language
             Command command = commands[i];
             string path = pathPrefix + (i + 1);
 
-            output.Add(indentText + "┌ " + path.PadRight(6) + command.ToBlockViewText());
+            // A címke után mindig marad legalább egy szóköz (pl. "3.2.e.1 step forward [1]"); a rövidebb címkék 6 karakterre igazítva maradnak.
+            output.Add(indentText + "┌ " + path.PadRight(Math.Max(6, path.Length + 1)) + command.ToBlockViewText());
 
             if (!command.IsControlBlock)
             {

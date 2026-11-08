@@ -58,3 +58,23 @@ D:\Mechwart\Verseny\DuszaCurrentRobot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdg
 D:\Mechwart\Verseny\DuszaCurrentRobot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\robot.pdb
 D:\Mechwart\Verseny\DuszaCurrentRobot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.genruntimeconfig.cache
 D:\Mechwart\Verseny\DuszaCurrentRobot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\ref\robot.dll
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\bin\Debug\net8.0-windows\robot.exe
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\bin\Debug\net8.0-windows\robot.deps.json
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\bin\Debug\net8.0-windows\robot.runtimeconfig.json
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\bin\Debug\net8.0-windows\robot.dll
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\bin\Debug\net8.0-windows\robot.pdb
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\MainWindow.baml
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\MainWindow.g.cs
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\App.g.cs
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\robot_MarkupCompile.cache
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\robot.g.resources
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.GeneratedMSBuildEditorConfig.editorconfig
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.AssemblyInfoInputs.cache
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.AssemblyInfo.cs
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.csproj.CoreCompileInputs.cache
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.sourcelink.json
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\robot.dll
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\refint\robot.dll
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\robot.pdb
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\adfsgfdggdfa.genruntimeconfig.cache
+D:\Mechwart\Verseny\Dusza Robot\DuszaRobotLabirintus\adfsgfdggdfa\adfsgfdggdfa\obj\Debug\net8.0-windows\ref\robot.dll
