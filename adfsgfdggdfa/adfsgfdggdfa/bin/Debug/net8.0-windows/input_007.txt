@@ -1,9 +1,0 @@
-2 2
-v.
-..
-set c1 to 4
-set sum to c1 + 2
-set ok to sum > 3
-set same to ok = true
-print same
-set z to 5 and q
